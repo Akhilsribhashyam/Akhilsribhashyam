@@ -1,0 +1,15 @@
+{
+  "name": "wedding-hub",
+  "version": "1.0.0",
+  "description": "All-in-one wedding guest hub: login, notifications, meal alerts, nearby places, cab booking",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/app.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
