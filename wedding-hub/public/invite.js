@@ -1,84 +1,121 @@
 const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const NS = 'http://www.w3.org/2000/svg';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let settings = {};
+
+const svgEl = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent?.append(e); return e; };
 
 /* ---- content from the server (falls back to the text already in the HTML) ---- */
 async function loadSettings() {
   try {
     settings = await (await fetch('/api/settings')).json();
-    const short = (full) => full.replace(/^[A-Z]\.\s*/, '').split(' ')[0];
-    const map = { ...settings, bride_short: short(settings.bride || ''), groom_short: short(settings.groom || '') };
-    for (const el of document.querySelectorAll('[data-bind]')) {
-      const v = map[el.dataset.bind];
-      if (v) el.textContent = v;
-    }
+    const short = (full = '') => full.replace(/^([A-Z]\.\s*)+/, '').split(' ')[0];
+    const b = short(settings.bride), g = short(settings.groom);
+    const city = /([A-Za-z]+)\s*,\s*A\.?P/.exec(settings.venue_address || '')?.[1];
+    const map = { ...settings, bride_short: b, groom_short: g, bride_initial: b[0], groom_initial: g[0], venue_city: city };
+    for (const el of $$('[data-bind]')) { const v = map[el.dataset.bind]; if (v) el.textContent = v; }
     if (settings.couple) document.title = `Wedding Invitation · ${settings.couple}`;
+    // "Friday, 12th February 2027" -> big date block; hide the block if the text has another shape
+    const m = /^\s*([A-Za-z]+)[,\s]+(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})/.exec(settings.date || '');
+    if (m) { $('#db-dow').textContent = m[1]; $('#db-day').textContent = m[2]; $('#db-my').textContent = `${m[3]} ${m[4]}`; }
+    else if (settings.date) { $('#dateblock').hidden = true; $('.hero .sr').className = 'time'; }
   } catch { /* keep static text */ }
-  $('#dir').href = settings.maps_url || 'https://www.google.com/maps/search/?api=1&query=Sri+Sai+Balaji+Function+Hall+Vizianagaram';
+  // "M.Tech., IITM · Senior Data Scientist, …" -> qualification on its own small line, role beneath
+  for (const el of $$('.p-info')) {
+    const [deg, ...rest] = el.textContent.split(' · ');
+    if (!rest.length) continue;
+    const a = document.createElement('span'); a.className = 'p-deg'; a.textContent = deg;
+    const b = document.createElement('span'); b.textContent = rest.join(' · ');
+    el.replaceChildren(a, b);
+  }
+  const dir = settings.maps_url || 'https://www.google.com/maps/search/?api=1&query=Sri+Sai+Balaji+Function+Hall+Vizianagaram';
+  for (const a of $$('.js-dir')) a.href = dir;
 }
 
-/* ---- mandala drawn once, reused ---- */
+/* ---- ornaments ---- */
 function mandala() {
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '-100 -100 200 200');
-  const add = (tag, attrs, parent = svg) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
-  const g = add('g', { fill: 'none', stroke: '#d9b25f', 'stroke-width': '.8' });
-  for (const r of [96, 78, 52, 30, 12]) add('circle', { r }, g);
-  for (let i = 0; i < 24; i++) add('ellipse', { cx: 0, cy: -87, rx: 4, ry: 9, transform: `rotate(${i * 15})` }, g);
-  for (let i = 0; i < 16; i++) add('path', { d: 'M0 -52 C 10 -62, 10 -74, 0 -80 C -10 -74, -10 -62, 0 -52 Z', transform: `rotate(${i * 22.5})` }, g);
-  for (let i = 0; i < 8; i++) add('path', { d: 'M0 -12 C 8 -20, 8 -28, 0 -32 C -8 -28, -8 -20, 0 -12 Z', transform: `rotate(${i * 45})` }, g);
+  const svg = svgEl('svg', { viewBox: '-100 -100 200 200' });
+  const g = svgEl('g', { fill: 'none', stroke: '#d6ad5c', 'stroke-width': '.7' }, svg);
+  for (const r of [97, 80, 54, 31, 12]) svgEl('circle', { r }, g);
+  for (let i = 0; i < 32; i++) svgEl('path', { d: 'M0 -80 C 5 -86, 5 -92, 0 -97 C -5 -92, -5 -86, 0 -80 Z', transform: `rotate(${i * 11.25})` }, g);
+  for (let i = 0; i < 16; i++) svgEl('path', { d: 'M0 -54 C 11 -63, 11 -74, 0 -80 C -11 -74, -11 -63, 0 -54 Z', transform: `rotate(${i * 22.5})` }, g);
+  for (let i = 0; i < 16; i++) svgEl('circle', { cx: 0, cy: -42.5, r: 2.2, transform: `rotate(${i * 22.5 + 11.25})` }, g);
+  for (let i = 0; i < 8; i++) svgEl('path', { d: 'M0 -12 C 9 -20, 9 -27, 0 -31 C -9 -27, -9 -20, 0 -12 Z', transform: `rotate(${i * 45})` }, g);
   return svg;
 }
-for (const host of document.querySelectorAll('[data-mandala]')) host.append(mandala());
+for (const host of $$('[data-mandala]')) host.append(mandala());
 
-/* ---- falling petals ---- */
+/* A toran: the garland of marigolds and mango leaves hung over a doorway for auspicious occasions. */
+function toran() {
+  const W = 390, n = 9, step = W / n;
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} 58`, preserveAspectRatio: 'xMidYMin slice' });
+  const g = svgEl('g', { fill: 'none', stroke: '#d6ad5c', 'stroke-width': '1', 'stroke-linecap': 'round' }, svg);
+  svgEl('path', { d: `M0 3 H${W}` }, g);
+  for (let i = 0; i < n; i++) {
+    const x0 = i * step, x1 = x0 + step, mid = x0 + step / 2;
+    svgEl('path', { d: `M${x0} 3 Q ${mid} 30 ${x1} 3` }, g);                                      // swag
+    svgEl('path', { d: `M${mid} 17 C ${mid + 7} 26, ${mid + 6} 40, ${mid} 50 C ${mid - 6} 40, ${mid - 7} 26, ${mid} 17 Z`, fill: '#d6ad5c22' }, g); // mango leaf
+    svgEl('path', { d: `M${mid} 20 V46`, 'stroke-width': '.6' }, g);
+    svgEl('circle', { cx: x0, cy: 5, r: 3.4, fill: '#d6ad5c' }, g);                               // marigold
+    for (const t of [0.25, 0.75]) { const x = x0 + step * t, y = 3 + 2 * 13.5 * t * (1 - t) * 2; svgEl('circle', { cx: x, cy: y, r: 1.7, fill: '#d6ad5c' }, g); }
+  }
+  svgEl('circle', { cx: W, cy: 5, r: 3.4, fill: '#d6ad5c' }, g);
+  return svg;
+}
+for (const host of $$('[data-toran]')) host.append(toran());
+
+/* ---- gold dust ---- */
 if (!reduced) {
-  const box = $('#petals');
-  for (let i = 0; i < 10; i++) {
-    const p = document.createElement('i'); p.className = 'petal';
-    p.style.left = Math.random() * 100 + '%';
-    p.style.animationDuration = 9 + Math.random() * 9 + 's';
-    p.style.animationDelay = -Math.random() * 14 + 's';
-    p.style.transform = `scale(${0.6 + Math.random() * 0.9})`;
-    box.append(p);
+  const box = $('#dust');
+  for (let i = 0; i < 26; i++) {
+    const d = document.createElement('i');
+    d.style.left = Math.random() * 100 + '%';
+    d.style.top = Math.random() * 100 + '%';
+    d.style.animationDuration = 3.5 + Math.random() * 5 + 's';
+    d.style.animationDelay = -Math.random() * 8 + 's';
+    const s = 0.5 + Math.random() * 1.1; d.style.width = d.style.height = 3 * s + 'px';
+    box.append(d);
   }
 }
 
 /* ---- countdown ---- */
 function tick() {
   const t = Date.parse(settings.event_start || '2027-02-13T00:15:00+05:30');
-  let ms = t - Date.now();
   const box = $('#count');
   if (Number.isNaN(t)) { box.hidden = true; return; }
-  if (ms <= 0) { box.textContent = Date.now() < t + 5400000 ? '💍 The wedding is happening now!' : '🎉 Thank you for celebrating with us'; return; }
-  const s = Math.floor(ms / 1000);
-  $('#cd-d').textContent = Math.floor(s / 86400);
-  $('#cd-h').textContent = String(Math.floor(s % 86400 / 3600)).padStart(2, '0');
-  $('#cd-m').textContent = String(Math.floor(s % 3600 / 60)).padStart(2, '0');
-  $('#cd-s').textContent = String(s % 60).padStart(2, '0');
+  const ms = t - Date.now();
+  if (ms <= 0) { box.classList.add('done'); box.textContent = Date.now() < t + 5400000 ? 'The wedding is happening now' : 'Thank you for celebrating with us'; return; }
+  const s = Math.floor(ms / 1000), set = (id, v) => { const el = $(id); if (el.textContent !== v) el.textContent = v; };
+  set('#cd-d', String(Math.floor(s / 86400)));
+  set('#cd-h', String(Math.floor(s % 86400 / 3600)).padStart(2, '0'));
+  set('#cd-m', String(Math.floor(s % 3600 / 60)).padStart(2, '0'));
+  set('#cd-s', String(s % 60).padStart(2, '0'));
 }
 
-/* ---- open the invitation ---- */
-$('#open').addEventListener('click', () => {
-  $('#gate').classList.add('go');
-  $('#main').hidden = false;
-  document.body.classList.remove('locked');
-  setTimeout(() => { $('#gate').hidden = true; }, reduced ? 0 : 900);
-  observer();
+/* ---- open the doors ---- */
+function open() {
+  const gate = $('#gate'), main = $('#main'), dock = $('#dock');
+  if (gate.classList.contains('go')) return;
+  main.hidden = false; dock.hidden = false;
   window.scrollTo(0, 0);
-});
-
-function observer() {
-  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.15 });
-  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+  requestAnimationFrame(() => { gate.classList.add('go'); main.classList.add('on'); });
+  document.body.classList.remove('locked');
+  setTimeout(() => { gate.hidden = true; }, reduced ? 0 : 1700);
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+  $$('.reveal').forEach((el) => io.observe(el));
+  // the quick-action dock appears once the guest scrolls past the first screen
+  const onScroll = () => dock.classList.toggle('show', window.scrollY > window.innerHeight * 0.55);
+  window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+  navigator.vibrate?.(12);
 }
+$('#open').addEventListener('click', open);
 
 /* ---- share ---- */
 $('#share').addEventListener('click', async () => {
   const text = `You are invited to the wedding of ${settings.couple || 'Bhuvaneswari & Akhil'}: ${settings.date || ''}, ${settings.venue || ''}.`;
   const url = location.origin + '/';
-  if (navigator.share) { try { await navigator.share({ title: 'Wedding Invitation', text, url }); return; } catch { return; } }
+  if (navigator.share) { try { await navigator.share({ title: 'Wedding Invitation', text, url }); } catch { /* cancelled */ } return; }
   window.open('https://wa.me/?text=' + encodeURIComponent(`${text} ${url}`), '_blank', 'noopener');
 });
 
