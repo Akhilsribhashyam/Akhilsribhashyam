@@ -5,7 +5,7 @@ export const DEFAULT_SETTINGS = {
   bride: 'V. Bhuvaneswari',
   bride_info: 'M.Tech., IITM · Senior Data Scientist, Kotak Mahindra Bank, Bangalore',
   groom: 'S. Akhil Sribhashyam',
-  groom_info: 'M.Tech., IITM · Senior Data Analyst, I CARE, Chennai',
+  groom_info: 'M.Tech., IITM · Senior Data Analyst, I\u00A0CARE, Chennai',
   groom_parents: 'S/o Sri. Sribhashyam Srinivasa Rao & Smt. Sribhashyam Seshukumari',
   date: 'Friday, 12th February 2027',
   time_text: 'Night 12:15 to 1:30',

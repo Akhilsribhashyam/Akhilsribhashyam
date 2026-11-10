@@ -47,7 +47,7 @@ body.locked{overflow:hidden}
 @keyframes bob{50%{transform:translateY(6px)}}
 
 /* sections */
-.sec{max-width:760px;margin:0 auto;padding:56px 20px;text-align:center}
+.sec{max-width:760px;margin:0 auto;padding:40px 18px;text-align:center}
 .title{font:600 2rem var(--serif);color:var(--gold2);margin:0 0 26px;position:relative;display:inline-block;padding:0 6px}
 .title::before,.title::after{content:'';position:absolute;top:52%;width:44px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
 .title::before{right:100%;margin-right:12px}.title::after{left:100%;margin-left:12px;transform:scaleX(-1)}
@@ -78,8 +78,9 @@ body.locked{overflow:hidden}
 .foot{text-align:center;padding:30px 20px 60px;color:var(--soft)}.foot .script{font-size:2.4rem;color:var(--gold2);margin:0}
 
 /* petals */
-.petals{position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden}
-.petal{position:absolute;top:-30px;width:12px;height:16px;background:radial-gradient(circle at 30% 30%,#ffd9a0,#e8a24a);border-radius:70% 0 70% 0;opacity:.75;animation:fall linear infinite}
+.petals{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+main{position:relative;z-index:1}
+.petal{position:absolute;top:-30px;width:12px;height:16px;background:radial-gradient(circle at 30% 30%,#ffd9a0,#e8a24a);border-radius:70% 0 70% 0;opacity:.5;animation:fall linear infinite}
 @keyframes fall{to{transform:translateY(110vh) rotate(540deg) translateX(40px)}}
 
 /* reveal */

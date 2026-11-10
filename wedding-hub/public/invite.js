@@ -35,7 +35,7 @@ for (const host of document.querySelectorAll('[data-mandala]')) host.append(mand
 /* ---- falling petals ---- */
 if (!reduced) {
   const box = $('#petals');
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 10; i++) {
     const p = document.createElement('i'); p.className = 'petal';
     p.style.left = Math.random() * 100 + '%';
     p.style.animationDuration = 9 + Math.random() * 9 + 's';
