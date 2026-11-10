@@ -55,7 +55,7 @@ function form(fields, submitLabel, fn, { reset = true } = {}) {
 const field = (label, name, o = {}) => {
   const id = o.attrs?.id || 'f_' + name + Math.random().toString(36).slice(2, 6);
   const input = o.type === 'textarea' ? h('textarea', { id, name, ...o.attrs, value: null }, o.attrs?.value || '')
-    : o.options ? h('select', { id, name }, o.options.map(([v, t]) => h('option', { value: v }, t)))
+    : o.options ? h('select', { id, name }, o.options.map(([v, t]) => h('option', { value: v, selected: o.value === v }, t)))
       : h('input', { id, name, type: o.type || 'text', ...o.attrs });
   return h('div', {}, h('label', { for: id }, label), input);
 };
@@ -63,27 +63,36 @@ const field = (label, name, o = {}) => {
 /* ---------------- login ---------------- */
 function showLogin() {
   state.es?.close(); state.es = null;
-  let mode = 'guest';
   const s = state.settings;
+  const canRegister = s.reg_open !== '0';
+  let mode = 'signin';
   const box = h('div');
-  const draw = () => {
-    box.replaceChildren(
-      h('div', { class: 'seg', role: 'group' },
-        h('button', { type: 'button', 'aria-pressed': mode === 'guest', onclick: () => { mode = 'guest'; draw(); } }, 'Guest'),
-        h('button', { type: 'button', 'aria-pressed': mode === 'staff', onclick: () => { mode = 'staff'; draw(); } }, 'Driver / Admin')),
-      mode === 'guest'
-        ? form([field('Your invite code', 'code', { attrs: { autocomplete: 'off', autocapitalize: 'characters', placeholder: 'e.g. K7M2QX', required: true } })],
-          'Enter', (fd) => api('POST', '/login', { code: fd.get('code') }).then(start), { reset: false })
-        : form([field('Username', 'login', { attrs: { autocomplete: 'username', autocapitalize: 'none' } }),
-          field('Password', 'password', { type: 'password', attrs: { autocomplete: 'current-password' } })],
-        'Log in', (fd) => api('POST', '/login', { login: fd.get('login'), password: fd.get('password') }).then(start), { reset: false }),
-    );
+  const done = (p) => p.then(start);
+  const forms = {
+    signin: () => form([field('Mobile number', 'login', { type: 'tel', attrs: { autocomplete: 'username', inputmode: 'tel', required: true, placeholder: '98765 43210' } }),
+      field('Password', 'password', { type: 'password', attrs: { autocomplete: 'current-password', required: true } })],
+    'Sign in', (fd) => done(api('POST', '/login', { login: fd.get('login'), password: fd.get('password') })), { reset: false }),
+    register: () => form([field('Your name', 'name', { attrs: { autocomplete: 'name', required: true, maxlength: 80 } }),
+      field('Mobile number', 'phone', { type: 'tel', attrs: { autocomplete: 'tel', inputmode: 'tel', required: true, placeholder: '98765 43210' } }),
+      field('Create a password (6+ characters)', 'password', { type: 'password', attrs: { autocomplete: 'new-password', required: true, minlength: 6 } }),
+      s.reg_needs_passcode === '1' ? field('Passcode from the invitation', 'passcode', { attrs: { autocomplete: 'off', required: true } }) : null],
+    'Create my account', (fd) => done(api('POST', '/register', Object.fromEntries(fd))), { reset: false }),
+    code: () => form([field('Your invite code', 'code', { attrs: { autocomplete: 'off', autocapitalize: 'characters', placeholder: 'e.g. K7M2QX', required: true } })],
+      'Enter', (fd) => done(api('POST', '/login', { code: fd.get('code') })), { reset: false }),
+    staff: () => form([field('Username', 'login', { attrs: { autocomplete: 'username', autocapitalize: 'none' } }),
+      field('Password', 'password', { type: 'password', attrs: { autocomplete: 'current-password' } })],
+    'Log in', (fd) => done(api('POST', '/login', { login: fd.get('login'), password: fd.get('password') })), { reset: false }),
   };
+  const tabs = [['signin', 'Sign in'], ...(canRegister ? [['register', 'Register']] : []), ['code', 'Invite code'], ['staff', 'Staff']];
+  const draw = () => box.replaceChildren(
+    h('div', { class: 'seg', role: 'group', 'aria-label': 'How do you want to enter?' },
+      tabs.map(([id, label]) => h('button', { type: 'button', 'aria-pressed': mode === id, onclick: () => { mode = id; draw(); } }, label))),
+    forms[mode]());
   draw();
   $app.replaceChildren(h('div', { class: 'wrap' },
     h('div', { class: 'hero login-hero' }, h('div', { class: 'te' }, 'శుభ వివాహం'), h('p', {}, 'You are invited to celebrate'), h('h1', { class: 'script' }, s.couple), h('p', {}, `${s.date} · ${s.venue}`)),
     h('div', { class: 'card' }, box),
-    h('p', { class: 'muted center' }, 'Your invite code is on your invitation, or ask the family. ', h('a', { href: '/' }, 'View the invitation'))));
+    h('p', { class: 'muted center' }, canRegister ? 'First time here? Choose Register. ' : 'Use the invite code the family sent you. ', h('a', { href: '/' }, 'View the invitation'))));
 }
 
 /* ---------------- shell ---------------- */
@@ -363,9 +372,13 @@ const adminViews = {
       await api('POST', '/guests', { names }); state.refresh();
     })),
     list(guests, 'No guests yet.', (g) => h('div', { class: 'card' }, h('div', { class: 'row between' },
-      h('div', {}, h('b', {}, g.name), h('div', { class: 'code' }, g.code), h('div', { class: 'muted' }, stayLabel(g) || 'Stay not set'), h('span', { class: `pill ${g.rsvp === 'yes' ? 'assigned' : g.rsvp === 'no' ? 'cancelled' : 'requested'}` }, g.rsvp === 'yes' ? `Coming (${g.rsvp_count})` : g.rsvp === 'no' ? 'Declined' : 'No reply')),
+      h('div', {}, h('b', {}, g.name), h('div', { class: 'code' }, g.code), h('div', { class: 'muted' }, g.login ? `📱 ${g.phone} · registered` : 'Invited by code'), h('div', { class: 'muted' }, stayLabel(g) || 'Stay not set'), h('span', { class: `pill ${g.rsvp === 'yes' ? 'assigned' : g.rsvp === 'no' ? 'cancelled' : 'requested'}` }, g.rsvp === 'yes' ? `Coming (${g.rsvp_count})` : g.rsvp === 'no' ? 'Declined' : 'No reply')),
       h('div', { class: 'row' },
         h('a', { class: 'btn small ghost', href: 'https://wa.me/?text=' + encodeURIComponent(share(g)), target: '_blank', rel: 'noopener noreferrer' }, 'WhatsApp'),
+        g.login ? h('button', { class: 'ghost small', onclick: async () => {
+          if (!confirm(`Set a new temporary password for ${g.name}? They will be signed out.`)) return;
+          const r = await api('POST', `/guests/${g.id}/reset-password`); alert(`New password for ${g.name}:\n\n${r.password}\n\nShare it with them (mobile number: ${g.phone}).`);
+        } }, 'Reset password') : null,
         h('button', { class: 'danger small', onclick: async () => { if (confirm(`Remove ${g.name}?`)) { await api('DELETE', '/people/' + g.id); state.refresh(); } } }, 'Remove'))),
       stayEditor(g, places)))];
   },
@@ -407,6 +420,9 @@ const adminViews = {
       ['groom_parents', 'Parents line'], ['date', 'Date as printed'], ['time_text', 'Time as printed'], ['venue', 'Venue'], ['venue_address', 'Venue address'], ['maps_url', 'Venue Google Maps link']];
     return [h('h2', {}, 'Wedding details'), h('p', { class: 'muted' }, 'These appear on the public invitation and in the guest app.'), h('div', { class: 'card' }, form([
       text.map(([k, label]) => field(label, k, { attrs: { value: s[k] || '' } })),
+      h('h3', {}, 'Guest registration'),
+      field('Can guests register themselves?', 'reg_open', { options: [['1', 'Yes, anyone with the link'], ['0', 'No, invite codes only']], value: s.reg_open === '0' ? '0' : '1' }),
+      field('Passcode (optional, print it on the invitation)', 'reg_passcode', { attrs: { value: s.reg_passcode || '', autocomplete: 'off', placeholder: 'e.g. akhilbhuvi27' } }),
       field('Muhurtham starts (used for countdown and calendar)', 'event_start', { type: 'datetime-local', attrs: { value: s.event_start ? toLocalInput(Date.parse(s.event_start)) : '' } }),
       field('Muhurtham ends', 'event_end', { type: 'datetime-local', attrs: { value: s.event_end ? toLocalInput(Date.parse(s.event_end)) : '' } }),
       field('Welcome message', 'welcome', { type: 'textarea', attrs: { value: s.welcome || '' } })],

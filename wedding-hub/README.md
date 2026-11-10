@@ -20,9 +20,12 @@ Needs Node 22.13+. No external database: data lives in `data/wedding.db` (SQLite
 
 | Role | Logs in with | Can |
 |------|-------------|-----|
-| **Guest** | 6-character invite code | See schedule, book/cancel cabs, see places, receive alerts |
+| **Guest** | Mobile number + password (self-registered), or a 6-character invite code | See schedule, book/cancel cabs, see places, receive alerts |
 | **Driver** | username + password (created by admin) | See assigned trips, start/complete them, toggle on/off duty |
 | **Admin** (you) | username + password | Add guests (bulk, with WhatsApp share link), add drivers, post places, send meal/custom notifications, manage cabs, edit schedule & details |
+
+## Guest registration
+Guests can create their own account (name, mobile number, password) from `/app` and are signed in immediately. In **Admin → Setup → Guest registration** you can keep it open, require a **passcode** (print it on the invitation), or close it so only invite codes work. You are notified of each new registration, and **Guests → Reset password** gives a forgotten-password guest a new temporary one. Passwords are stored hashed (scrypt); the passcode is never sent to guests' browsers.
 
 ## How cab booking works
 1. Guest enters pickup, drop-off, time, passengers.

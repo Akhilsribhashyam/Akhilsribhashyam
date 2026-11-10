@@ -168,6 +168,55 @@ test('guest stay: hotel + room, new house, old house', async () => {
   assert.equal((await ira('PUT', `/api/guests/${g2.id}/stay`, { type: 'new_house' })).status, 403);
 });
 
+test('guest self-registration, sign-in, passcode and closing', async () => {
+  const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
+  const anon = await client();
+  assert.equal((await anon('GET', '/api/settings')).body.reg_open, '1');
+
+  // validation
+  assert.equal((await anon('POST', '/api/register', { name: 'A', phone: '9876500001', password: 'secret1' })).status, 400);
+  assert.equal((await anon('POST', '/api/register', { name: 'Asha', phone: '12345', password: 'secret1' })).status, 400);
+  assert.equal((await anon('POST', '/api/register', { name: 'Asha', phone: '9876500001', password: 'abc' })).status, 400);
+
+  // register -> signed in immediately as a guest
+  const asha = await client();
+  assert.equal((await asha('POST', '/api/register', { name: 'Asha K', phone: '+91 98765 00001', password: 'secret1' })).status, 200);
+  const me = (await asha('GET', '/api/me')).body;
+  assert.equal(me.role, 'guest'); assert.equal(me.name, 'Asha K');
+  assert.ok((await admin('GET', '/api/notifications')).body.some((n) => n.title === 'New guest registered: Asha K'));
+
+  // same number (any formatting) can't register twice; sign in works with any formatting; wrong password fails
+  assert.equal((await anon('POST', '/api/register', { name: 'Imposter', phone: '9876500001', password: 'secret2' })).status, 409);
+  const again = await client();
+  assert.equal((await again('POST', '/api/login', { login: '098765 00001', password: 'wrong' })).status, 401);
+  assert.equal((await again('POST', '/api/login', { login: '9876500001', password: 'secret1' })).status, 200);
+  assert.equal((await again('GET', '/api/me')).body.name, 'Asha K');
+  // registered guests can book cabs, but cannot reach admin APIs or pretend to be staff
+  assert.equal((await again('GET', '/api/guests')).status, 403);
+
+  // passcode: required, never exposed publicly, exposed to admin only
+  assert.equal((await admin('PUT', '/api/settings', { reg_passcode: 'Bhuvi27' })).status, 200);
+  const pub = (await anon('GET', '/api/settings')).body;
+  assert.equal(pub.reg_passcode, undefined); assert.equal(pub.reg_needs_passcode, '1');
+  assert.equal((await admin('GET', '/api/settings')).body.reg_passcode, 'Bhuvi27');
+  assert.equal((await anon('POST', '/api/register', { name: 'Bala', phone: '9876500002', password: 'secret1' })).status, 403);
+  assert.equal((await anon('POST', '/api/register', { name: 'Bala', phone: '9876500002', password: 'secret1', passcode: 'nope' })).status, 403);
+  assert.equal((await anon('POST', '/api/register', { name: 'Bala', phone: '9876500002', password: 'secret1', passcode: 'bhuvi27' })).status, 200);
+
+  // closing registration
+  await admin('PUT', '/api/settings', { reg_open: '0' });
+  assert.equal((await (await client())('POST', '/api/register', { name: 'Late', phone: '9876500003', password: 'secret1', passcode: 'Bhuvi27' })).status, 403);
+
+  // admin password reset signs the guest out and the new password works
+  const list = (await admin('GET', '/api/guests')).body;
+  const a = list.find((g) => g.name === 'Asha K');
+  const r = (await admin('POST', `/api/guests/${a.id}/reset-password`)).body;
+  assert.equal((await asha('GET', '/api/me')).status, 401);
+  assert.equal((await (await client())('POST', '/api/login', { login: '9876500001', password: 'secret1' })).status, 401);
+  assert.equal((await (await client())('POST', '/api/login', { login: '9876500001', password: r.password })).status, 200);
+  assert.equal((await asha('POST', `/api/guests/${a.id}/reset-password`)).status, 401);
+});
+
 test('many successful logins from one IP are fine; repeated failures get locked out', async () => {
   const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
   const { body: { guests } } = await admin('POST', '/api/guests', { names: Array.from({ length: 40 }, (_, i) => `Bulk ${i}`) });

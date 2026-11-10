@@ -15,6 +15,8 @@ export const DEFAULT_SETTINGS = {
   // Friday-night muhurtham is after midnight, i.e. 00:15 on Sat 13 Feb IST. Admin can change in Setup.
   event_start: '2027-02-13T00:15:00+05:30',
   event_end: '2027-02-13T01:30:00+05:30',
+  reg_open: '1',      // '1' = guests may register themselves, '0' = closed
+  reg_passcode: '',   // optional passcode printed on the invitation; empty = no passcode
   welcome: 'Your presence will make our celebration complete. Find the schedule, book a cab, get meal alerts and discover where to eat, all in this app.',
 };
 

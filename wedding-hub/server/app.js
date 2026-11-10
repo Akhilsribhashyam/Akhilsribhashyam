@@ -13,6 +13,11 @@ const LIVE = ['assigned', 'enroute'];
 const str = (v, max = 500) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const int = (v, d = 0) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d);
 const PLACE_KINDS = ['eat', 'visit', 'stay', 'home', 'airport'];
+// digits only; drops India's +91 / leading 0 so "+91 98765 43210", "098765 43210" and "9876543210" are one account
+const normPhone = (v) => {
+  const d = String(v ?? '').replace(/[\s\-().+]/g, '');
+  return /^\d+$/.test(d) ? (d.length === 12 && d.startsWith('91') ? d.slice(2) : d.length === 11 && d.startsWith('0') ? d.slice(1) : d) : d;
+};
 const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
 const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : '');
 
@@ -79,8 +84,10 @@ export function createApp(db) {
       : roles.length && !roles.includes(req.user.role) ? res.status(403).json({ error: 'Not allowed' })
         : next();
 
-  app.get('/api/settings', (_req, res) => {
-    res.json(Object.fromEntries(db.prepare('SELECT key,value FROM settings').all().map((r) => [r.key, r.value])));
+  app.get('/api/settings', (req, res) => {
+    const all = Object.fromEntries(db.prepare('SELECT key,value FROM settings').all().map((r) => [r.key, r.value]));
+    if (req.user?.role !== 'admin') { all.reg_needs_passcode = all.reg_passcode ? '1' : '0'; delete all.reg_passcode; } // never reveal the passcode
+    res.json(all);
   });
 
   app.post('/api/login', (req, res) => {
@@ -89,13 +96,45 @@ export function createApp(db) {
     if (req.body.code) { // guest: invite code only
       user = db.prepare("SELECT * FROM users WHERE role='guest' AND code=?").get(str(req.body.code, 20).toUpperCase());
     } else {
-      const u = db.prepare("SELECT * FROM users WHERE role IN ('admin','driver') AND login=?").get(str(req.body.login, 60).toLowerCase());
+      const raw = str(req.body.login, 60).toLowerCase();
+      const u = db.prepare('SELECT * FROM users WHERE login=?').get(raw) || db.prepare("SELECT * FROM users WHERE role='guest' AND login=?").get(normPhone(raw));
       if (u && verifyPassword(str(req.body.password, 200), u.pass_hash)) user = u;
     }
     if (!user) { recordFailure(req.ip); return res.status(401).json({ error: 'Wrong details, please check and retry' }); }
     const token = crypto.randomBytes(32).toString('hex');
     db.prepare('INSERT INTO sessions (token,user_id,created_at) VALUES (?,?,?)').run(token, user.id, Date.now());
     setCookie(res, token, SESSION_MS / 1000);
+    res.json({ ok: true });
+  });
+
+  /* ---------- guest self-registration ---------- */
+  const sha = (v) => crypto.createHash('sha256').update(String(v)).digest();
+  const regs = new Map(); // ip -> {n, reset}; generous, since a whole wedding party may share one network
+  const startSession = (res, userId) => {
+    const token = crypto.randomBytes(32).toString('hex');
+    db.prepare('INSERT INTO sessions (token,user_id,created_at) VALUES (?,?,?)').run(token, userId, Date.now());
+    setCookie(res, token, SESSION_MS / 1000);
+  };
+  app.post('/api/register', (req, res) => {
+    const cfg = Object.fromEntries(db.prepare("SELECT key,value FROM settings WHERE key IN ('reg_open','reg_passcode')").all().map((r) => [r.key, r.value]));
+    if (cfg.reg_open === '0') return res.status(403).json({ error: 'Registration is closed. Please use the invite code you were sent, or ask the family.' });
+    const now = Date.now(), r = regs.get(req.ip);
+    if (!r || r.reset < now) regs.set(req.ip, { n: 1, reset: now + 3600000 }); else if (++r.n > 60) return res.status(429).json({ error: 'Too many registrations, try again later' });
+    if (cfg.reg_passcode && !crypto.timingSafeEqual(sha(str(req.body.passcode, 60).toLowerCase()), sha(cfg.reg_passcode.toLowerCase())))
+      return res.status(403).json({ error: 'Wrong passcode. It is printed on your invitation.' });
+    const name = str(req.body.name, 80), phone = normPhone(req.body.phone), password = str(req.body.password, 200);
+    if (name.length < 2) return res.status(400).json({ error: 'Please enter your name' });
+    if (!/^\d{10,15}$/.test(phone)) return res.status(400).json({ error: 'Enter a valid mobile number (10 to 15 digits)' });
+    if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (db.prepare('SELECT 1 FROM users WHERE login=?').get(phone)) return res.status(409).json({ error: 'This number is already registered. Please sign in instead.' });
+    const ins = db.prepare("INSERT INTO users (role,name,phone,login,pass_hash,code,created_at) VALUES ('guest',?,?,?,?,?,?)");
+    let id;
+    for (let i = 0; i < 20 && !id; i++) {
+      try { id = Number(ins.run(name, phone, phone, hashPassword(password), newInviteCode(), Date.now()).lastInsertRowid); }
+      catch (e) { if (!/UNIQUE/.test(e.message)) throw e; if (db.prepare('SELECT 1 FROM users WHERE login=?').get(phone)) return res.status(409).json({ error: 'This number is already registered. Please sign in instead.' }); }
+    }
+    notifyRole('admin', `New guest registered: ${name}`, phone, 'info');
+    startSession(res, id);
     res.json({ ok: true });
   });
 
@@ -196,7 +235,7 @@ export function createApp(db) {
 
   /* ---------- people (admin) ---------- */
   app.get('/api/guests', need('admin'), (_req, res) =>
-    res.json(db.prepare(`SELECT u.id,u.name,u.phone,u.code,u.rsvp,u.rsvp_count,u.stay_type,u.stay_room,u.stay_place_id,p.name stay_place
+    res.json(db.prepare(`SELECT u.id,u.name,u.phone,u.code,u.login,u.rsvp,u.rsvp_count,u.stay_type,u.stay_room,u.stay_place_id,p.name stay_place
       FROM users u LEFT JOIN places p ON p.id=u.stay_place_id WHERE u.role='guest' ORDER BY u.name`).all()));
   app.post('/api/guests', need('admin'), (req, res) => {
     // accepts one name or many (one per line) for fast bulk entry
@@ -212,6 +251,16 @@ export function createApp(db) {
       throw new Error('Could not generate a unique code');
     }));
     res.json({ ok: true, guests: made });
+  });
+
+  // Admin can set a new temporary password for a guest who forgot theirs (signs out their old sessions).
+  app.post('/api/guests/:id/reset-password', need('admin'), (req, res) => {
+    const g = db.prepare("SELECT id FROM users WHERE id=? AND role='guest'").get(int(req.params.id));
+    if (!g) return res.status(404).json({ error: 'Guest not found' });
+    const password = newInviteCode(8);
+    db.prepare('UPDATE users SET pass_hash=? WHERE id=?').run(hashPassword(password), g.id);
+    db.prepare('DELETE FROM sessions WHERE user_id=?').run(g.id);
+    res.json({ ok: true, password });
   });
 
   // Where a guest is staying: a hotel (with room number), the new house or the old house.
