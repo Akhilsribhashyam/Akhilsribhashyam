@@ -21,14 +21,6 @@ async function loadSettings() {
     if (m) { $('#db-dow').textContent = m[1]; $('#db-day').textContent = m[2]; $('#db-my').textContent = `${m[3]} ${m[4]}`; }
     else if (settings.date) { $('#dateblock').hidden = true; $('.hero .sr').className = 'time'; }
   } catch { /* keep static text */ }
-  // "M.Tech., IITM · Senior Data Scientist, …" -> qualification on its own small line, role beneath
-  for (const el of $$('.p-info')) {
-    const [deg, ...rest] = el.textContent.split(' · ');
-    if (!rest.length) continue;
-    const a = document.createElement('span'); a.className = 'p-deg'; a.textContent = deg;
-    const b = document.createElement('span'); b.textContent = rest.join(' · ');
-    el.replaceChildren(a, b);
-  }
   const dir = settings.maps_url || 'https://www.google.com/maps/search/?api=1&query=Sri+Sai+Balaji+Function+Hall+Vizianagaram';
   for (const a of $$('.js-dir')) a.href = dir;
 }

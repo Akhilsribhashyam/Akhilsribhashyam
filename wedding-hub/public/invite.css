@@ -108,9 +108,6 @@ main{position:relative;z-index:1}
 .p-lead{font-style:italic;font-size:1.1rem;line-height:1.45;margin:.7rem auto 1.5rem}
 .p-role{font:600 .62rem var(--sans);letter-spacing:.4em;text-transform:uppercase;color:var(--paper-gold);margin:0;padding-left:.4em}
 .p-name{font-size:clamp(2.3rem,10.5vw,3rem);line-height:1.15;margin:.15rem 0 .25rem;color:#6b1226}
-.p-info{margin:0 auto;max-width:30ch;font-size:1.05rem;line-height:1.45}
-.p-info span{display:block}
-.p-deg{font:600 .66rem var(--sans);letter-spacing:.26em;text-transform:uppercase;color:var(--paper-gold);margin:.1rem 0 .35rem;padding-left:.26em}
 .p-parents{margin:.7rem auto 0;max-width:30ch;font-style:italic;font-size:1rem;line-height:1.45;color:#6b1226}
 .p-with{display:flex;align-items:center;justify-content:center;gap:12px;margin:1.4rem 0 1.3rem}
 .p-with span{width:52px;height:1px;background:#b08a3e}.p-with em{font:italic 1.25rem var(--serif);color:var(--paper-gold)}

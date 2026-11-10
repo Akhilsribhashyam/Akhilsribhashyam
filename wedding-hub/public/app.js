@@ -416,7 +416,7 @@ const adminViews = {
   },
   async setup() {
     const [events, s] = await Promise.all([api('GET', '/events'), api('GET', '/settings')]);
-    const text = [['couple', 'Couple (short, e.g. Bhuvaneswari & Akhil)'], ['bride', 'Bride name'], ['bride_info', 'Bride details'], ['groom', 'Groom name'], ['groom_info', 'Groom details'],
+    const text = [['couple', 'Couple (short, e.g. Bhuvaneswari & Akhil)'], ['bride', 'Bride name'], ['groom', 'Groom name'], 
       ['groom_parents', 'Parents line'], ['date', 'Date as printed'], ['time_text', 'Time as printed'], ['venue', 'Venue'], ['venue_address', 'Venue address'], ['maps_url', 'Venue Google Maps link']];
     return [h('h2', {}, 'Wedding details'), h('p', { class: 'muted' }, 'These appear on the public invitation and in the guest app.'), h('div', { class: 'card' }, form([
       text.map(([k, label]) => field(label, k, { attrs: { value: s[k] || '' } })),
