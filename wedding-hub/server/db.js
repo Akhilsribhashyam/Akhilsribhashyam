@@ -65,6 +65,7 @@ export function openDb(file = process.env.DB_FILE || 'data/wedding.db') {
   const addCol = (table, col, def) => {
     if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   };
+  addCol('events', 'ends_at', 'INTEGER');
   addCol('places', 'kind', "TEXT NOT NULL DEFAULT 'eat'");
   addCol('places', 'city', 'TEXT');
   addCol('places', 'lat', 'REAL');
@@ -84,7 +85,7 @@ export function seedContent(db) {
   const ins = db.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) ins.run(k, v);
   if (!db.prepare('SELECT 1 FROM events').get())
-    for (const e of DEFAULT_EVENTS) db.prepare('INSERT INTO events (title,starts_at,venue,details) VALUES (?,?,?,?)').run(e.title, e.starts_at, e.venue, e.details);
+    for (const e of DEFAULT_EVENTS) db.prepare('INSERT INTO events (title,starts_at,ends_at,venue,details) VALUES (?,?,?,?,?)').run(e.title, e.starts_at, e.ends_at, e.venue, e.details);
   if (!db.prepare('SELECT 1 FROM places').get() && process.env.SEED_PLACES !== '0')
     for (const p of DEFAULT_PLACES)
       db.prepare('INSERT INTO places (name,category,address,maps_url,note,created_at,kind,city,lat,lng,approx) VALUES (?,?,?,?,?,?,?,?,?,?,?)')

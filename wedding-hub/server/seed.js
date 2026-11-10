@@ -22,11 +22,14 @@ export const DEFAULT_SETTINGS = {
   welcome: 'Your presence will make our celebration complete. Find the schedule, book a cab, get meal alerts and discover where to eat, all in this app.',
 };
 
+const HALL = 'Sri Sai Balaji Function Hall, Vizianagaram';
+const at = (iso) => Date.parse(iso + ':00+05:30'); // all times are India time
 export const DEFAULT_EVENTS = [
-  { title: 'Reception', starts_at: Date.parse('2027-02-12T19:00:00+05:30'),
-    venue: 'Sri Sai Balaji Function Hall, Vizianagaram', details: '7:00 PM onwards' },
-  { title: 'Muhurtham (Wedding)', starts_at: Date.parse('2027-02-13T01:58:00+05:30'),
-    venue: 'Sri Sai Balaji Function Hall, Vizianagaram', details: 'Friday night, after midnight: 1:58 AM' },
+  { title: 'Groom Making', starts_at: at('2027-02-10T07:00'), ends_at: at('2027-02-10T09:00'), venue: '', details: '' },
+  { title: 'Sangeet & Mehendi', starts_at: at('2027-02-11T17:00'), ends_at: at('2027-02-11T20:00'), venue: '', details: '' },
+  { title: 'Haldi & Mangalasnanam', starts_at: at('2027-02-12T07:00'), ends_at: null, venue: '', details: 'Till lunch' },
+  { title: 'Reception', starts_at: at('2027-02-12T19:00'), ends_at: null, venue: HALL, details: 'Onwards' },
+  { title: 'Marriage (Muhurtham)', starts_at: at('2027-02-13T01:58'), ends_at: null, venue: HALL, details: 'Friday night, after the reception' },
 ];
 
 /* lat/lng are approximate (area level) and flagged approx=1: use "Open in Maps" for exact directions.

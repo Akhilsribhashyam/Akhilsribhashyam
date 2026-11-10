@@ -177,8 +177,10 @@ export function createApp(db) {
   app.post('/api/events', need('admin'), (req, res) => {
     const title = str(req.body.title, 120), starts_at = int(req.body.starts_at);
     if (!title || !starts_at) return res.status(400).json({ error: 'Title and time are required' });
-    db.prepare('INSERT INTO events (title,starts_at,venue,details) VALUES (?,?,?,?)')
-      .run(title, starts_at, str(req.body.venue, 200), str(req.body.details, 500));
+    const ends_at = int(req.body.ends_at) || null;
+    if (ends_at && ends_at <= starts_at) return res.status(400).json({ error: 'End time must be after the start time' });
+    db.prepare('INSERT INTO events (title,starts_at,ends_at,venue,details) VALUES (?,?,?,?,?)')
+      .run(title, starts_at, ends_at, str(req.body.venue, 200), str(req.body.details, 500));
     res.json({ ok: true });
   });
   app.delete('/api/events/:id', need('admin'), (req, res) => {

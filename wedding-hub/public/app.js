@@ -31,6 +31,8 @@ let geo = null; // guest's location, kept only in memory for this visit
 const state = { me: null, settings: {}, tab: null, unread: 0, es: null, refresh: null };
 const when = (ms) => new Date(ms).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 const toLocalInput = (ms) => { const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const dayName = (ms) => new Date(ms).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
 const STATUS = { requested: 'Finding a driver…', assigned: 'Driver booked', enroute: 'Driver on the way', completed: 'Completed', cancelled: 'Cancelled' };
 
 function toast(title, body) {
@@ -97,7 +99,7 @@ function showLogin() {
 
 /* ---------------- shell ---------------- */
 const TABS = {
-  guest: [['home', '🏠', 'Home'], ['cabs', '🚖', 'Cabs'], ['eat', '📍', 'Places'], ['alerts', '🔔', 'Alerts']],
+  guest: [['home', '🏠', 'Home'], ['events', '🗓️', 'Events'], ['cabs', '🚖', 'Cabs'], ['eat', '📍', 'Places'], ['alerts', '🔔', 'Alerts']],
   driver: [['trips', '🚖', 'Trips'], ['alerts', '🔔', 'Alerts']],
   admin: [['send', '📣', 'Send'], ['rides', '🚖', 'Cabs'], ['guests', '👥', 'Guests'], ['places', '🍽️', 'Places'], ['drivers', '🧑‍✈️', 'Drivers'], ['setup', '⚙️', 'Setup'], ['alerts', '🔔', 'Alerts']],
 };
@@ -215,6 +217,34 @@ function stayEditor(g, places) {
   return h('details', {}, h('summary', {}, '🛏️ Set stay / room'), type, box, err, save);
 }
 
+/* ---- the celebrations, as a day-by-day timeline ---- */
+const eventState = (e, now = Date.now()) => now >= e.starts_at && now < (e.ends_at || e.starts_at + 3 * 3600000) ? 'now' : now < e.starts_at ? 'upcoming' : 'done';
+const eventTime = (e) => e.ends_at ? `${clock(e.starts_at)} – ${clock(e.ends_at)}` : clock(e.starts_at);
+
+function timeline(events) {
+  if (!events.length) return h('div', { class: 'empty' }, 'The schedule will appear here soon.');
+  const next = events.find((e) => eventState(e) === 'upcoming');
+  const days = new Map();
+  for (const e of events) { const k = dayName(e.starts_at); days.set(k, [...(days.get(k) || []), e]); }
+  return h('div', { class: 'tl' }, [...days].map(([day, list]) => h('section', {},
+    h('h3', { class: 'tl-day' }, day),
+    list.map((e) => { const st = eventState(e); return h('div', { class: `tl-item ${st}` },
+      h('div', { class: 'tl-time' }, eventTime(e)),
+      h('div', { class: 'tl-body' },
+        h('div', { class: 'row between' }, h('b', {}, e.title),
+          st === 'now' ? h('span', { class: 'pill enroute' }, 'Happening now') : e === next ? h('span', { class: 'pill assigned' }, 'Next') : null),
+        e.venue ? h('div', { class: 'muted' }, '📍 ' + e.venue) : null,
+        e.details ? h('div', { class: 'muted' }, e.details) : null)); }))));
+}
+
+function nextUp(events, open) {
+  const e = events.find((x) => eventState(x) === 'now') || events.find((x) => eventState(x) === 'upcoming');
+  if (!e) return null;
+  return h('div', { class: 'card nextup' }, h('div', { class: 'muted' }, eventState(e) === 'now' ? 'Happening now' : 'Next up'),
+    h('h3', {}, e.title), h('div', {}, `${dayName(e.starts_at)} · ${eventTime(e)}`), e.venue ? h('div', { class: 'muted' }, '📍 ' + e.venue) : null,
+    h('button', { class: 'ghost small', onclick: open }, 'See all events'));
+}
+
 /* ---------------- guest ---------------- */
 const guestViews = {
   async home() {
@@ -230,7 +260,7 @@ const guestViews = {
       h('div', { class: 'hero banner' }, h('div', { class: 'te' }, 'శుభ వివాహం'), h('h1', { class: 'script' }, st.couple),
         h('p', {}, `${st.date} · ${st.time_text}`), h('p', { class: 'muted' }, st.venue),
         Number.isFinite(d) && d > 0 ? h('div', { class: 'daysleft' }, h('b', {}, d), d === 1 ? ' day to go' : ' days to go') : null),
-      h('div', { class: 'tiles' }, tile('🚖', 'Book a cab', go('cabs')), tile('📍', 'Places', go('eat')), tile('🔔', 'Alerts', go('alerts')),
+      h('div', { class: 'tiles' }, tile('🚖', 'Book a cab', go('cabs')), tile('📍', 'Places', go('eat')), tile('🗓️', 'Events', go('events')),
         h('a', { class: 'tile', href: st.maps_url, target: '_blank', rel: 'noopener noreferrer' }, h('span', {}, '📍'), 'Directions')),
       meals.map((n) => h('div', { class: 'card meal' }, h('b', {}, '🍛 ' + n.title), n.body ? h('div', {}, n.body) : null, (n.url ? h('a', { class: 'btn small', href: n.url, target: '_blank', rel: 'noopener noreferrer' }, '📍 Directions') : null), h('div', { class: 'muted' }, when(n.created_at)))),
       me.stay_type ? h('div', { class: 'card stay' }, h('h3', {}, 'Where you are staying'), h('div', { class: 'stayline' }, stayLabel(me)),
@@ -243,10 +273,12 @@ const guestViews = {
       h('div', { class: 'card' }, h('h3', {}, 'Venue'), h('b', {}, st.venue), h('div', { class: 'muted' }, st.venue_address),
         h('div', { class: 'row' }, h('a', { class: 'btn small', href: st.maps_url, target: '_blank', rel: 'noopener noreferrer' }, '📍 Directions'),
           h('a', { class: 'btn small ghost', href: '/invite.ics' }, '📅 Add to calendar'), h('a', { class: 'btn small ghost', href: '/' }, '💌 Invitation'))),
-      h('h2', {}, 'Schedule'),
-      list(events, 'The schedule will appear here soon.', (e) => h('div', { class: 'card' }, h('b', {}, e.title), h('div', {}, when(e.starts_at), e.venue ? ' · ' + e.venue : ''),
-        e.details ? h('div', { class: 'muted' }, e.details) : null)),
+      nextUp(events, go('events')),
       h('p', { class: 'muted center' }, st.welcome)];
+  },
+  async events() {
+    const events = await api('GET', '/events');
+    return [h('h2', {}, 'Wedding events'), h('p', { class: 'muted' }, 'All the celebrations, day by day. Times are India time.'), timeline(events)];
   },
   async cabs() {
     const [rides, me] = await Promise.all([api('GET', '/rides'), api('GET', '/me')]);
@@ -434,12 +466,12 @@ const adminViews = {
     }, { reset: false })),
     h('h2', {}, 'Schedule'), h('div', { class: 'card' }, form([
       field('Event', 'title', { attrs: { required: true, placeholder: 'Haldi, Sangeet, Muhurtham…' } }),
-      h('div', { class: 'grid2' }, field('When', 'when', { type: 'datetime-local', attrs: { required: true } }), field('Venue', 'venue')),
-      field('Details', 'details')],
+      h('div', { class: 'grid2' }, field('Starts', 'when', { type: 'datetime-local', attrs: { required: true } }), field('Ends (optional)', 'ends', { type: 'datetime-local' })),
+      field('Venue', 'venue'), field('Details', 'details')],
     'Add event', async (fd) => {
-      await api('POST', '/events', { title: fd.get('title'), starts_at: new Date(fd.get('when')).getTime(), venue: fd.get('venue'), details: fd.get('details') }); state.refresh();
+      await api('POST', '/events', { title: fd.get('title'), starts_at: new Date(fd.get('when')).getTime(), ends_at: fd.get('ends') ? new Date(fd.get('ends')).getTime() : null, venue: fd.get('venue'), details: fd.get('details') }); state.refresh();
     })),
-    events.map((e) => h('div', { class: 'card row between' }, h('div', {}, h('b', {}, e.title), h('div', { class: 'muted' }, when(e.starts_at) + (e.venue ? ' · ' + e.venue : ''))),
+    events.map((e) => h('div', { class: 'card row between' }, h('div', {}, h('b', {}, e.title), h('div', { class: 'muted' }, when(e.starts_at) + (e.ends_at ? ' – ' + clock(e.ends_at) : '') + (e.venue ? ' · ' + e.venue : ''))),
       h('button', { class: 'danger small', onclick: async () => { await api('DELETE', '/events/' + e.id); state.refresh(); } }, 'Remove')))];
   },
 };

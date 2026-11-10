@@ -105,6 +105,11 @@ test('invitation, calendar file, seeded places, RSVP, settings', async () => {
   assert.equal(st.muhurtham_text, 'Saturday, 13th February 2027 · 1:58 AM');
 
   const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
+  const ev = (await admin('GET', '/api/events')).body;
+  assert.deepEqual(ev.map((e) => e.title), ['Groom Making', 'Sangeet & Mehendi', 'Haldi & Mangalasnanam', 'Reception', 'Marriage (Muhurtham)']);
+  assert.equal(new Date(ev[0].starts_at).toISOString(), '2027-02-10T01:30:00.000Z');   // Wed 10 Feb, 7:00 AM IST
+  assert.equal(ev[1].ends_at - ev[1].starts_at, 3 * 3600000);                           // Sangeet 5 PM to 8 PM
+  assert.equal((await admin('POST', '/api/events', { title: 'X', starts_at: 2000, ends_at: 1000 })).status, 400);
   const { body: { guests } } = await admin('POST', '/api/guests', { names: ['Gita'] });
   const gita = await client(); await gita('POST', '/api/login', { code: guests[0].code });
 

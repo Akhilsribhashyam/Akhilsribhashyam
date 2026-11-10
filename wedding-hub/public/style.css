@@ -77,3 +77,16 @@ input[type=checkbox]{width:auto;min-height:0;accent-color:var(--brand);transform
 details{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}summary{cursor:pointer;color:var(--brand);font-weight:600;min-height:36px;display:flex;align-items:center}details select,details input{margin:6px 0}
 .stayline{font:600 1.25rem var(--serif);color:var(--brand)}.card.stay{border-color:var(--gold)}
 a:not(.btn):not(.tile){color:var(--brand)}
+
+/* ---- events timeline ---- */
+.tl section{margin:0 0 18px}
+.tl-day{font-size:1.35rem;color:var(--brand);margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.tl-item{display:grid;grid-template-columns:86px 1fr;gap:12px;padding:12px 0 12px 14px;margin-left:5px;border-left:2px solid var(--line);position:relative}
+.tl-item::before{content:'';position:absolute;left:-7px;top:18px;width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid var(--gold)}
+.tl-item.now::before{background:var(--gold);box-shadow:0 0 0 5px #b98a3e33}
+.tl-item.done{opacity:.55}
+.tl-time{font-weight:600;font-size:.86rem;color:var(--brand);line-height:1.35;padding-top:2px}
+.tl-body b{font:600 1.2rem var(--serif)}
+.card.nextup{border-color:var(--gold);box-shadow:inset 4px 0 0 var(--gold)}.nextup h3{margin:2px 0}.nextup button{margin-top:10px}
+.tabs button{min-width:62px;padding:8px 6px}
+header.top{gap:10px}header.top .brand{white-space:nowrap;font-size:1.25rem}header.top .row{flex-wrap:nowrap;min-width:0}header.top .muted{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:84px}
