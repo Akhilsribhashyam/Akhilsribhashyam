@@ -167,3 +167,4 @@ main{position:relative;z-index:1}
   .rise,.reveal{opacity:1;transform:none;transition:none}.on .rise,.on .foil.rise{animation:none}
   .door,.gate-in,.dock{transition:none}
 }
+.p-parents,.p-lead,.lead,.note{text-wrap:balance}

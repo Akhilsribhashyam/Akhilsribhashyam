@@ -3,6 +3,7 @@
 export const DEFAULT_SETTINGS = {
   couple: 'Bhuvaneswari & Akhil',
   bride: 'V. Bhuvaneswari',
+  bride_parents: 'D/o Sri. S. Varadarajan & Smt. Maheswari Varadarajan',
   groom: 'S. Akhil Sribhashyam',
   groom_parents: 'S/o Sri. Sribhashyam Srinivasa Rao & Smt. Sribhashyam Seshukumari',
   date: 'Friday, 12th February 2027',
