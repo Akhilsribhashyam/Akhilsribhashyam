@@ -12,6 +12,7 @@ const LIVE = ['assigned', 'enroute'];
 
 const str = (v, max = 500) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const int = (v, d = 0) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d);
+const PLACE_KINDS = ['eat', 'visit', 'stay', 'home', 'airport'];
 const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
 const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : '');
 
@@ -41,15 +42,16 @@ export function createApp(db) {
   const emit = (userId, event, data) => {
     for (const res of streams.get(userId) || []) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
-  const notify = (userId, title, body = '', kind = 'info') => {
+  const notify = (userId, title, body = '', kind = 'info', url = null) => {
     const created_at = Date.now();
-    const r = db.prepare('INSERT INTO notifications (user_id,kind,title,body,created_at) VALUES (?,?,?,?,?)')
-      .run(userId, kind, title, body, created_at);
-    emit(userId, 'notification', { id: Number(r.lastInsertRowid), kind, title, body, read: 0, created_at });
+    const r = db.prepare('INSERT INTO notifications (user_id,kind,title,body,created_at,url) VALUES (?,?,?,?,?,?)')
+      .run(userId, kind, title, body, created_at, url);
+    emit(userId, 'notification', { id: Number(r.lastInsertRowid), kind, title, body, url, read: 0, created_at });
   };
-  const notifyRole = (role, title, body, kind) => {
-    for (const u of db.prepare('SELECT id FROM users WHERE role=?').all(role)) notify(u.id, title, body, kind);
+  const notifyRole = (role, title, body, kind, url) => {
+    for (const u of db.prepare('SELECT id FROM users WHERE role=?').all(role)) notify(u.id, title, body, kind, url);
   };
+  const placeUrl = (p) => p.maps_url || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([p.name, p.address, p.city].filter(Boolean).join(', '));
 
   /* ---------- auth ---------- */
   const attempts = new Map(); // ip -> {n, reset}
@@ -152,11 +154,22 @@ export function createApp(db) {
 
   // Admin broadcast. kind: 'info' | 'meal'
   app.post('/api/announce', need('admin'), (req, res) => {
+    const sent = () => db.prepare("SELECT COUNT(*) c FROM users WHERE role='guest'").get().c;
+    // Meal alert: "<Meal> is ready at <place>", with the place's address and a directions link.
+    if (req.body.meal) {
+      const meal = ['Breakfast', 'Lunch', 'Snacks', 'Dinner'].find((m) => m === req.body.meal);
+      if (!meal) return res.status(400).json({ error: 'Choose Breakfast, Lunch, Snacks or Dinner' });
+      const place = db.prepare('SELECT * FROM places WHERE id=?').get(int(req.body.place_id));
+      if (!place) return res.status(400).json({ error: 'Choose where the meal is served' });
+      const body = [`Please head to ${place.name}${place.address ? ', ' + place.address : ''}.`, str(req.body.note, 200)].filter(Boolean).join(' ');
+      notifyRole('guest', `${meal} is ready at ${place.name} 🍛`, body, 'meal', placeUrl(place));
+      return res.json({ ok: true, sent: sent() });
+    }
     const title = str(req.body.title, 120);
     if (!title) return res.status(400).json({ error: 'Title is required' });
     const kind = req.body.kind === 'meal' ? 'meal' : 'info';
     notifyRole('guest', title, str(req.body.body, 500), kind);
-    res.json({ ok: true, sent: db.prepare("SELECT COUNT(*) c FROM users WHERE role='guest'").get().c });
+    res.json({ ok: true, sent: sent() });
   });
 
   /* ---------- nearby places ---------- */
@@ -168,8 +181,8 @@ export function createApp(db) {
     if ((lat != null && Math.abs(lat) > 90) || (lng != null && Math.abs(lng) > 180)) return res.status(400).json({ error: 'Invalid coordinates' });
     const r = db.prepare('INSERT INTO places (name,category,address,maps_url,note,created_at,kind,city,lat,lng,approx) VALUES (?,?,?,?,?,?,?,?,?,?,0)')
       .run(name, str(req.body.category, 40), str(req.body.address, 200), safeUrl(str(req.body.maps_url, 500)), str(req.body.note, 300), Date.now(),
-        req.body.kind === 'visit' ? 'visit' : 'eat', str(req.body.city, 40), lat, lng);
-    if (req.body.notify) notifyRole('guest', `New place to eat: ${name}`, str(req.body.note, 200) || str(req.body.address, 200), 'place');
+        PLACE_KINDS.includes(req.body.kind) ? req.body.kind : 'eat', str(req.body.city, 40), lat, lng);
+    if (req.body.notify) notifyRole('guest', `New place added: ${name}`, str(req.body.note, 200) || str(req.body.address, 200), 'place', placeUrl({ name, address: str(req.body.address, 200), city: str(req.body.city, 40), maps_url: safeUrl(str(req.body.maps_url, 500)) }));
     res.json({ ok: true, id: Number(r.lastInsertRowid) });
   });
   app.delete('/api/places/:id', need('admin'), (req, res) => {

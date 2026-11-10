@@ -124,3 +124,23 @@ test('invitation, calendar file, seeded places, RSVP, settings', async () => {
   assert.equal(st2.venue, 'New Hall'); assert.equal(st2.evil, undefined);
   assert.equal((await gita('PUT', '/api/settings', { venue: 'Hacked' })).status, 403);
 });
+
+test('meal alert at a chosen place, and new place types', async () => {
+  const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
+  const { body: { guests } } = await admin('POST', '/api/guests', { names: ['Hari'] });
+  const hari = await client(); await hari('POST', '/api/login', { code: guests[0].code });
+  for (const [name, kind] of [['Vizag Airport', 'airport'], ['Our House', 'home'], ['Farm House', 'home'], ['Hotel Grand', 'stay'], ['Bogus', 'nonsense']])
+    assert.equal((await admin('POST', '/api/places', { name, kind, city: 'Vizianagaram' })).status, 200);
+  const places = (await hari('GET', '/api/places')).body;
+  assert.equal(places.find((p) => p.name === 'Farm House').kind, 'home');
+  assert.equal(places.find((p) => p.name === 'Vizag Airport').kind, 'airport');
+  assert.equal(places.find((p) => p.name === 'Bogus').kind, 'eat');   // unknown kinds fall back safely
+
+  const farm = places.find((p) => p.name === 'Farm House');
+  assert.equal((await admin('POST', '/api/announce', { meal: 'Lunch', place_id: farm.id, note: 'Till 3 pm' })).status, 200);
+  const n = (await hari('GET', '/api/notifications')).body.find((x) => x.title.startsWith('Lunch is ready at Farm House'));
+  assert.equal(n.kind, 'meal'); assert.match(n.body, /Till 3 pm/); assert.match(n.url, /^https:\/\/www\.google\.com\/maps\/search/);
+  assert.equal((await admin('POST', '/api/announce', { meal: 'Brunch', place_id: farm.id })).status, 400);
+  assert.equal((await admin('POST', '/api/announce', { meal: 'Dinner', place_id: 99999 })).status, 400);
+  assert.equal((await hari('POST', '/api/announce', { meal: 'Lunch', place_id: farm.id })).status, 403);
+});

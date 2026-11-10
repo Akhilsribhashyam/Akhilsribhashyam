@@ -70,6 +70,7 @@ export function openDb(file = process.env.DB_FILE || 'data/wedding.db') {
   addCol('places', 'lat', 'REAL');
   addCol('places', 'lng', 'REAL');
   addCol('places', 'approx', 'INTEGER NOT NULL DEFAULT 0');
+  addCol('notifications', 'url', 'TEXT');   // optional link, e.g. directions to where the meal is served
   addCol('users', 'rsvp', 'TEXT');            // 'yes' | 'no'
   addCol('users', 'rsvp_count', 'INTEGER');   // how many people are coming
   return db;

@@ -88,7 +88,7 @@ function showLogin() {
 
 /* ---------------- shell ---------------- */
 const TABS = {
-  guest: [['home', '🏠', 'Home'], ['cabs', '🚖', 'Cabs'], ['eat', '🍽️', 'Eat'], ['alerts', '🔔', 'Alerts']],
+  guest: [['home', '🏠', 'Home'], ['cabs', '🚖', 'Cabs'], ['eat', '📍', 'Places'], ['alerts', '🔔', 'Alerts']],
   driver: [['trips', '🚖', 'Trips'], ['alerts', '🔔', 'Alerts']],
   admin: [['send', '📣', 'Send'], ['rides', '🚖', 'Cabs'], ['guests', '👥', 'Guests'], ['places', '🍽️', 'Places'], ['drivers', '🧑‍✈️', 'Drivers'], ['setup', '⚙️', 'Setup'], ['alerts', '🔔', 'Alerts']],
 };
@@ -153,7 +153,7 @@ async function alertsView() {
   return [h('h2', {}, 'Alerts'), enable, list(items, 'Nothing yet. Meal and cab updates will show up here.', (n) =>
     h('div', { class: `card ${n.kind === 'meal' ? 'meal' : ''} ${n.read ? '' : 'unread'}` },
       h('b', {}, (n.kind === 'meal' ? '🍛 ' : n.kind === 'ride' ? '🚖 ' : n.kind === 'place' ? '📍 ' : '') + n.title),
-      n.body ? h('div', {}, n.body) : null, h('div', { class: 'muted' }, when(n.created_at))))];
+      n.body ? h('div', {}, n.body) : null, (n.url ? h('a', { class: 'btn small', href: n.url, target: '_blank', rel: 'noopener noreferrer' }, '📍 Directions') : null), h('div', { class: 'muted' }, when(n.created_at))))];
 }
 
 const rideCard = (r, actions = []) => h('div', { class: 'card' },
@@ -166,7 +166,7 @@ const rideCard = (r, actions = []) => h('div', { class: 'card' },
 
 const mapsLink = (p) => p.maps_url || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([p.name, p.address, p.city].filter(Boolean).join(', '));
 const placeCard = (p, admin, dist) => h('div', { class: 'card place' },
-  h('div', { class: 'row between' }, h('b', {}, (p.kind === 'visit' ? '🏛️ ' : '🍽️ ') + p.name), dist != null ? h('span', { class: 'pill near' }, `${p.approx ? '~' : ''}${dist < 10 ? dist.toFixed(1) : Math.round(dist)} km`) : null),
+  h('div', { class: 'row between' }, h('b', {}, ({ visit: '🏛️ ', stay: '🏨 ', home: '🏡 ', airport: '✈️ ' }[p.kind] || '🍽️ ') + p.name), dist != null ? h('span', { class: 'pill near' }, `${p.approx ? '~' : ''}${dist < 10 ? dist.toFixed(1) : Math.round(dist)} km`) : null),
   h('div', { class: 'row tags' }, p.city ? h('span', { class: 'pill' }, p.city) : null, p.category ? h('span', { class: 'pill' }, p.category) : null),
   p.address ? h('div', { class: 'muted' }, p.address) : null, p.note ? h('div', {}, p.note) : null,
   h('div', { class: 'row' },
@@ -195,9 +195,9 @@ const guestViews = {
       h('div', { class: 'hero banner' }, h('div', { class: 'te' }, 'శుభ వివాహం'), h('h1', { class: 'script' }, st.couple),
         h('p', {}, `${st.date} · ${st.time_text}`), h('p', { class: 'muted' }, st.venue),
         Number.isFinite(d) && d > 0 ? h('div', { class: 'daysleft' }, h('b', {}, d), d === 1 ? ' day to go' : ' days to go') : null),
-      h('div', { class: 'tiles' }, tile('🚖', 'Book a cab', go('cabs')), tile('🍽️', 'Eat & explore', go('eat')), tile('🔔', 'Alerts', go('alerts')),
+      h('div', { class: 'tiles' }, tile('🚖', 'Book a cab', go('cabs')), tile('📍', 'Places', go('eat')), tile('🔔', 'Alerts', go('alerts')),
         h('a', { class: 'tile', href: st.maps_url, target: '_blank', rel: 'noopener noreferrer' }, h('span', {}, '📍'), 'Directions')),
-      meals.map((n) => h('div', { class: 'card meal' }, h('b', {}, '🍛 ' + n.title), n.body ? h('div', {}, n.body) : null, h('div', { class: 'muted' }, when(n.created_at)))),
+      meals.map((n) => h('div', { class: 'card meal' }, h('b', {}, '🍛 ' + n.title), n.body ? h('div', {}, n.body) : null, (n.url ? h('a', { class: 'btn small', href: n.url, target: '_blank', rel: 'noopener noreferrer' }, '📍 Directions') : null), h('div', { class: 'muted' }, when(n.created_at)))),
       h('div', { class: 'card' }, h('h3', {}, 'Will you join us?'),
         me.rsvp ? h('p', {}, me.rsvp === 'yes' ? `✅ You are coming (${me.rsvp_count} ${me.rsvp_count > 1 ? 'people' : 'person'}). You can change this any time.` : '💌 You told us you cannot make it. You can change this any time.') : h('p', { class: 'muted' }, 'Please let the family know so we can plan for you.'),
         h('label', {}, 'Number of people'), count,
@@ -231,13 +231,13 @@ const guestViews = {
   },
   async eat() {
     const places = await api('GET', '/places');
-    const f = { city: 'all', kind: 'eat' };
+    const f = { city: 'all', kind: 'all' };
     const box = h('div'), ctl = h('div'), status = h('p', { class: 'muted' });
     const chips = (key, opts) => h('div', { class: 'seg', role: 'group' }, opts.map(([v, t]) =>
       h('button', { type: 'button', 'aria-pressed': f[key] === v, onclick: () => { f[key] = v; paint(); } }, t)));
     const nearUrl = () => geo ? `https://www.google.com/maps/search/restaurants/@${geo.lat},${geo.lng},15z` : 'https://www.google.com/maps/search/restaurants+near+me';
     function paint() {
-      ctl.replaceChildren(chips('kind', [['eat', '🍽️ Eat'], ['visit', '🏛️ See & do'], ['all', 'All']]),
+      ctl.replaceChildren(chips('kind', [['all', 'All'], ['eat', '🍽️ Eat'], ['visit', '🏛️ See'], ['stay', '🏨 Stay'], ['home', '🏡 Family'], ['airport', '✈️ Airport']]),
         chips('city', [['all', 'Everywhere'], ['Vizianagaram', 'Vizianagaram'], ['Visakhapatnam', 'Vizag']]));
       let rows = places.filter((p) => (f.kind === 'all' || p.kind === f.kind) && (f.city === 'all' || p.city === f.city));
       if (geo) rows = rows.map((p) => ({ p, d: p.lat != null ? haversine(geo.lat, geo.lng, p.lat, p.lng) : null })).sort((a, b) => (a.d ?? 1e9) - (b.d ?? 1e9));
@@ -255,7 +255,7 @@ const guestViews = {
     } }, geo ? '📍 Near me ✓' : '📍 Near me');
     const mapsBtn = h('a', { class: 'btn ghost', href: nearUrl(), target: '_blank', rel: 'noopener noreferrer' }, '🔎 Restaurants near me (Google Maps)');
     paint();
-    return [h('h2', {}, 'Eat & explore'), h('div', { class: 'row' }, near, mapsBtn), status, ctl, box,
+    return [h('h2', {}, 'Places'), h('div', { class: 'row' }, near, mapsBtn), status, ctl, box,
       h('p', { class: 'muted center' }, 'Vizag is about 50 km from Vizianagaram. Locations are approximate; tap Open in Maps for exact directions.')];
   },
   alerts: alertsView,
@@ -284,17 +284,27 @@ const driverViews = {
 /* ---------------- admin ---------------- */
 const adminViews = {
   async send() {
-    const meal = (name) => h('button', { class: 'small', onclick: async (e) => {
-      const where = document.getElementById('mealwhere').value.trim();
-      if (!confirm(`Notify ALL guests: "${name} is ready"?`)) return;
+    const places = await api('GET', '/places');
+    const order = { home: 0, stay: 1, eat: 2, visit: 3, airport: 4 }, kindIcon = { home: '🏡', stay: '🏨', eat: '🍽️', visit: '🏛️', airport: '✈️' };
+    const sorted = [...places].sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || a.name.localeCompare(b.name));
+    const where = h('select', { id: 'mealplace', 'aria-label': 'Where is the meal served' },
+      h('option', { value: '' }, places.length ? 'Choose where it is served…' : 'Add a place first (Places tab)'),
+      sorted.map((p) => h('option', { value: p.id }, `${kindIcon[p.kind] || ''} ${p.name}${p.city ? ' · ' + p.city : ''}`)));
+    const note = h('input', { id: 'mealnote', maxlength: 200, placeholder: 'e.g. Serving till 3 pm' });
+    const meal = (name) => h('button', { onclick: async (e) => {
+      if (!where.value) return toast('Choose a place first', 'Select where the meal is served.');
+      const place = where.selectedOptions[0].textContent.trim();
+      if (!confirm(`Notify ALL guests: "${name} is ready at ${place}"?`)) return;
       e.target.disabled = true;
-      try { const r = await api('POST', '/announce', { kind: 'meal', title: `${name} is ready 🍛`, body: where ? `Please head to ${where}.` : '' }); toast('Sent', `${r.sent} guests notified`); }
+      try { const r = await api('POST', '/announce', { meal: name, place_id: Number(where.value), note: note.value }); toast('Sent', `${r.sent} guests notified`); note.value = ''; }
+      catch (ex) { toast('Not sent', ex.message); }
       finally { e.target.disabled = false; }
     } }, name);
     return [h('h2', {}, 'Send a notification'),
-      h('div', { class: 'card' }, h('h3', {}, 'Meal is ready'), h('p', { class: 'muted' }, 'One tap tells every guest that food is served.'),
-        field('Where? (optional)', 'where', { attrs: { id: 'mealwhere', placeholder: 'Main dining hall' } }),
-        h('div', { class: 'row' }, ['Breakfast', 'Lunch', 'Snacks', 'Dinner'].map(meal))),
+      h('div', { class: 'card' }, h('h3', {}, 'Meal is ready'), h('p', { class: 'muted' }, 'Pick the place, then tap the meal. Every guest is notified with a directions link.'),
+        h('label', { for: 'mealplace' }, 'Where is it served?'), where,
+        h('label', { for: 'mealnote' }, 'Extra note (optional)'), note,
+        h('div', { class: 'row', 'aria-label': 'Meal' }, ['Breakfast', 'Lunch', 'Snacks', 'Dinner'].map(meal))),
       h('div', { class: 'card' }, h('h3', {}, 'Custom message'), form([
         field('Title', 'title', { attrs: { required: true, maxlength: 120 } }), field('Message', 'body', { type: 'textarea' })],
       'Send to all guests', async (fd) => { const r = await api('POST', '/announce', { title: fd.get('title'), body: fd.get('body') }); toast('Sent', `${r.sent} guests notified`); }))];
@@ -334,7 +344,7 @@ const adminViews = {
       field('Name', 'name', { attrs: { required: true } }),
       h('div', { class: 'grid2' }, field('Type', 'category', { attrs: { placeholder: 'Veg, Biryani, Café…' } }), field('Address', 'address')),
       h('div', { class: 'grid2' },
-        field('Type', 'kind', { options: [['eat', '🍽️ Place to eat'], ['visit', '🏛️ Place to visit']] }),
+        field('Type', 'kind', { options: [['eat', '🍽️ Place to eat'], ['visit', '🏛️ Place to visit'], ['stay', '🏨 Hotel / stay'], ['home', '🏡 House / farm house / old house'], ['airport', '✈️ Airport']] }),
         field('City', 'city', { options: [['Vizianagaram', 'Vizianagaram'], ['Visakhapatnam', 'Visakhapatnam'], ['', 'Other']] })),
       field('Google Maps link (optional)', 'maps_url', { attrs: { placeholder: 'https://maps.app.goo.gl/…' } }),
       h('div', { class: 'grid2' }, field('Latitude (for "near me")', 'lat', { attrs: { inputmode: 'decimal' } }), field('Longitude', 'lng', { attrs: { inputmode: 'decimal' } })),
