@@ -3,15 +3,98 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#7a2e3b">
-  <title>Wedding Hub</title>
+  <meta name="theme-color" content="#3a0a14">
+  <title>Wedding Invitation · Bhuvaneswari &amp; Akhil</title>
+  <meta name="description" content="You are warmly invited to the wedding of V. Bhuvaneswari and S. Akhil Sribhashyam on 12 February 2027 at Sri Sai Balaji Function Hall, Vizianagaram.">
+  <meta property="og:title" content="Wedding Invitation · Bhuvaneswari & Akhil">
+  <meta property="og:description" content="Friday, 12th February 2027 · Sri Sai Balaji Function Hall, Vizianagaram">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Great+Vibes&family=Inter:wght@400;500;600&family=Noto+Serif+Telugu:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="invite.css">
 </head>
-<body>
-  <div id="app"></div>
-  <div id="toasts" aria-live="polite"></div>
-  <script src="app.js" type="module"></script>
+<body class="locked">
+  <div class="petals" id="petals" aria-hidden="true"></div>
+
+  <!-- Opening screen -->
+  <section class="gate" id="gate" aria-label="Open invitation">
+    <div class="mandala" data-mandala aria-hidden="true"></div>
+    <p class="te">శుభ వివాహం</p>
+    <p class="kicker">You are invited</p>
+    <h1 class="script"><span data-bind="bride_short">Bhuvaneswari</span> <i>&amp;</i> <span data-bind="groom_short">Akhil</span></h1>
+    <button class="open" id="open">Open invitation</button>
+  </section>
+
+  <main id="main" hidden>
+    <!-- Hero -->
+    <header class="hero">
+      <div class="mandala big" data-mandala aria-hidden="true"></div>
+      <p class="te">శుభ వివాహం</p>
+      <p class="kicker">Shubha Vivaham</p>
+      <p class="lead">Together with our families, we joyfully invite you to the wedding of</p>
+      <h2 class="names script"><span data-bind="bride_short">Bhuvaneswari</span><i>&amp;</i><span data-bind="groom_short">Akhil</span></h2>
+      <p class="date" data-bind="date">Friday, 12th February 2027</p>
+      <p class="time" data-bind="time_text">Night 12:15 to 1:30</p>
+      <div class="count" id="count" role="timer" aria-live="off" aria-label="Time until the wedding">
+        <div><b id="cd-d">--</b><span>days</span></div><div><b id="cd-h">--</b><span>hours</span></div>
+        <div><b id="cd-m">--</b><span>mins</span></div><div><b id="cd-s">--</b><span>secs</span></div>
+      </div>
+      <a class="scroll" href="#couple" aria-label="Scroll to details">▾</a>
+    </header>
+
+    <!-- Couple -->
+    <section class="sec reveal" id="couple">
+      <h3 class="title">The Couple</h3>
+      <div class="pair">
+        <article class="person">
+          <p class="role">Selvi</p>
+          <h4 class="script" data-bind="bride">V. Bhuvaneswari</h4>
+          <p data-bind="bride_info">M.Tech., IITM · Senior Data Scientist, Kotak Mahindra Bank, Bangalore</p>
+        </article>
+        <div class="with" aria-hidden="true"><span>with</span></div>
+        <article class="person">
+          <p class="role">Selvan</p>
+          <h4 class="script" data-bind="groom">S. Akhil Sribhashyam</h4>
+          <p data-bind="groom_info">M.Tech., IITM · Senior Data Analyst, I CARE, Chennai</p>
+          <p class="parents" data-bind="groom_parents">S/o Sri. Sribhashyam Srinivasa Rao &amp; Smt. Sribhashyam Seshukumari</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- When & where -->
+    <section class="sec reveal" id="venue">
+      <h3 class="title">When &amp; Where</h3>
+      <div class="ticket">
+        <div class="tk-when"><span class="small">On</span><b data-bind="date">Friday, 12th February 2027</b><span data-bind="time_text">Night 12:15 to 1:30</span></div>
+        <div class="tk-where"><span class="small">At</span><b data-bind="venue">Sri Sai Balaji Function Hall</b><span data-bind="venue_address">Near Aim Concept School, Ganesh Colony, Thotapalem, Balaji Nagar, Vizianagaram, A.P. - 535002</span></div>
+      </div>
+      <div class="actions">
+        <a class="btn gold" id="dir" target="_blank" rel="noopener noreferrer" href="#">📍 Get directions</a>
+        <a class="btn" href="/invite.ics">📅 Add to calendar</a>
+        <button class="btn" id="share" type="button">💬 Share invitation</button>
+      </div>
+      <p class="note">The muhurtham is on Friday night, after midnight. Please plan your stay and travel accordingly.</p>
+    </section>
+
+    <!-- App teaser -->
+    <section class="sec reveal" id="guests">
+      <h3 class="title">For our guests</h3>
+      <p class="lead">Everything for the celebration, in one place.</p>
+      <ul class="feat">
+        <li><span>🚖</span><b>Book a cab</b>A driver is confirmed for you instantly</li>
+        <li><span>🍛</span><b>Meal alerts</b>Get notified the moment food is served</li>
+        <li><span>📍</span><b>Eat &amp; explore</b>Places near you in Vizianagaram and Vizag</li>
+        <li><span>🗓️</span><b>Schedule</b>Every ceremony and timing</li>
+      </ul>
+      <a class="btn gold big" href="/app">Guest login</a>
+      <p class="note">Use the invite code we sent you.</p>
+    </section>
+
+    <footer class="foot">
+      <div class="mandala small" data-mandala aria-hidden="true"></div>
+      <p class="script" data-bind="couple">Bhuvaneswari &amp; Akhil</p>
+      <p>With love and blessings from our families</p>
+    </footer>
+  </main>
+  <script src="invite.js" type="module"></script>
 </body>
 </html>

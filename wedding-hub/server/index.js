@@ -1,8 +1,9 @@
-import { openDb, seedAdmin } from './db.js';
+import { openDb, seedAdmin, seedContent } from './db.js';
 import { createApp } from './app.js';
 
 const db = openDb();
 const admin = seedAdmin(db);
+seedContent(db);
 if (admin) {
   console.log('\n=== First run: admin account created ===');
   console.log(`  username: ${admin.login}\n  password: ${admin.pass}`);

@@ -2,6 +2,12 @@
 
 One place for your wedding guests: log in with an invite code, see the schedule, get **live notifications** (meal ready, new eating spots, cab updates), browse **places to eat nearby**, and **book a cab** that is automatically assigned to an available driver.
 
+## Pages
+- `/` is the public **digital invitation** (no login): opening reveal, countdown, couple, venue, directions, add-to-calendar (`/invite.ics`), WhatsApp share.
+- `/app` is the **guest app** (guests, drivers and admin log in here).
+
+All invitation text (names, date, venue, map link, muhurtham time) is editable in **Admin → Setup**.
+
 ## Run it
 
 ```bash
@@ -25,6 +31,9 @@ Needs Node 22.13+. No external database: data lives in `data/wedding.db` (SQLite
 
 ## Notifications
 Delivered live over Server-Sent Events (in-app toast + alerts inbox + browser notification if allowed). They work while the app is open or in a background tab. True push to a closed phone app needs Web Push + a service worker (not included yet).
+
+## Places & "near me"
+First run seeds real, named places in **Vizianagaram** and **Visakhapatnam (Vizag)** (restaurants plus sights). Guests can filter by city/type and tap **Near me** to sort by distance (uses their phone location, never stored). Seeded coordinates are area-level approximations (marked `~`); "Open in Maps" searches by name for the exact spot. Admin can add/remove places and notify guests. Set `SEED_PLACES=0` to skip seeding.
 
 ## Tests
 `npm test` covers login, cab assignment/overlap/capacity/waiting list, permissions and URL sanitising.

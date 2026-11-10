@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashPassword, verifyPassword, newInviteCode } from './db.js';
+import { DEFAULT_SETTINGS } from './seed.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const SESSION_MS = 14 * 24 * 3600 * 1000;
@@ -11,6 +12,7 @@ const LIVE = ['assigned', 'enroute'];
 
 const str = (v, max = 500) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const int = (v, d = 0) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : d);
+const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v));
 const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : '');
 
 export function createApp(db) {
@@ -64,7 +66,7 @@ export function createApp(db) {
   app.use((req, _res, next) => {
     const token = cookieOf(req);
     if (token) {
-      req.user = db.prepare(`SELECT u.id,u.role,u.name,u.phone,u.seats,u.vehicle,u.available FROM sessions s
+      req.user = db.prepare(`SELECT u.id,u.role,u.name,u.phone,u.seats,u.vehicle,u.available,u.rsvp,u.rsvp_count FROM sessions s
         JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?`).get(token, Date.now() - SESSION_MS);
     }
     next();
@@ -116,7 +118,13 @@ export function createApp(db) {
   /* ---------- settings & schedule (admin edits) ---------- */
   app.put('/api/settings', need('admin'), (req, res) => {
     const up = db.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
-    for (const k of ['couple', 'date', 'venue', 'welcome']) if (typeof req.body[k] === 'string') up.run(k, str(req.body[k], 400));
+    for (const k of Object.keys(DEFAULT_SETTINGS)) {
+      if (typeof req.body[k] !== 'string') continue;
+      const v = str(req.body[k], 400);
+      if (k === 'maps_url' && v && !safeUrl(v)) return res.status(400).json({ error: 'Maps link must start with http(s)://' });
+      if ((k === 'event_start' || k === 'event_end') && v && Number.isNaN(Date.parse(v))) return res.status(400).json({ error: 'Invalid date/time' });
+      up.run(k, v);
+    }
     res.json({ ok: true });
   });
 
@@ -152,12 +160,15 @@ export function createApp(db) {
   });
 
   /* ---------- nearby places ---------- */
-  app.get('/api/places', need(), (_req, res) => res.json(db.prepare('SELECT * FROM places ORDER BY id DESC').all()));
+  app.get('/api/places', need(), (_req, res) => res.json(db.prepare('SELECT * FROM places ORDER BY city, kind, id').all()));
   app.post('/api/places', need('admin'), (req, res) => {
     const name = str(req.body.name, 120);
     if (!name) return res.status(400).json({ error: 'Name is required' });
-    const r = db.prepare('INSERT INTO places (name,category,address,maps_url,note,created_at) VALUES (?,?,?,?,?,?)')
-      .run(name, str(req.body.category, 40), str(req.body.address, 200), safeUrl(str(req.body.maps_url, 500)), str(req.body.note, 300), Date.now());
+    const lat = num(req.body.lat), lng = num(req.body.lng);
+    if ((lat != null && Math.abs(lat) > 90) || (lng != null && Math.abs(lng) > 180)) return res.status(400).json({ error: 'Invalid coordinates' });
+    const r = db.prepare('INSERT INTO places (name,category,address,maps_url,note,created_at,kind,city,lat,lng,approx) VALUES (?,?,?,?,?,?,?,?,?,?,0)')
+      .run(name, str(req.body.category, 40), str(req.body.address, 200), safeUrl(str(req.body.maps_url, 500)), str(req.body.note, 300), Date.now(),
+        req.body.kind === 'visit' ? 'visit' : 'eat', str(req.body.city, 40), lat, lng);
     if (req.body.notify) notifyRole('guest', `New place to eat: ${name}`, str(req.body.note, 200) || str(req.body.address, 200), 'place');
     res.json({ ok: true, id: Number(r.lastInsertRowid) });
   });
@@ -168,7 +179,7 @@ export function createApp(db) {
 
   /* ---------- people (admin) ---------- */
   app.get('/api/guests', need('admin'), (_req, res) =>
-    res.json(db.prepare("SELECT id,name,phone,code FROM users WHERE role='guest' ORDER BY name").all()));
+    res.json(db.prepare("SELECT id,name,phone,code,rsvp,rsvp_count FROM users WHERE role='guest' ORDER BY name").all()));
   app.post('/api/guests', need('admin'), (req, res) => {
     // accepts one name or many (one per line) for fast bulk entry
     const names = (Array.isArray(req.body.names) ? req.body.names : [req.body.name]).map((n) => str(n, 80)).filter(Boolean);
@@ -208,6 +219,19 @@ export function createApp(db) {
     db.prepare('UPDATE users SET available=? WHERE id=?').run(req.body.available ? 1 : 0, req.user.id);
     if (req.body.available) assignWaiting();
     res.json({ ok: true });
+  });
+
+  /* ---------- RSVP ---------- */
+  app.post('/api/rsvp', need('guest'), (req, res) => {
+    const yes = req.body.attending === true;
+    const count = yes ? Math.min(Math.max(int(req.body.count, 1), 1), 20) : null;
+    db.prepare('UPDATE users SET rsvp=?, rsvp_count=? WHERE id=?').run(yes ? 'yes' : 'no', count, req.user.id);
+    notifyRole('admin', `${req.user.name} ${yes ? `is coming (${count})` : 'cannot make it'}`, '', 'rsvp');
+    res.json({ ok: true, rsvp: yes ? 'yes' : 'no', rsvp_count: count });
+  });
+  app.get('/api/rsvp/summary', need('admin'), (_req, res) => {
+    res.json(db.prepare(`SELECT COALESCE(SUM(rsvp='yes'),0) yes_households, COALESCE(SUM(CASE WHEN rsvp='yes' THEN rsvp_count END),0) people,
+      COALESCE(SUM(rsvp='no'),0) declined, COALESCE(SUM(rsvp IS NULL),0) pending FROM users WHERE role='guest'`).get());
   });
 
   /* ---------- cab booking ---------- */
@@ -302,6 +326,20 @@ export function createApp(db) {
   });
 
   /* ---------- static + errors ---------- */
+  // Calendar file so guests can save the muhurtham to their phone with one tap.
+  app.get('/invite.ics', (_req, res) => {
+    const st = Object.fromEntries(db.prepare('SELECT key,value FROM settings').all().map((r) => [r.key, r.value]));
+    const z = (iso) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    const esc = (t) => String(t || '').replace(/[\\;,]/g, (c) => '\\' + c).replace(/\r?\n/g, '\\n');
+    const start = Date.parse(st.event_start), end = Date.parse(st.event_end);
+    if (Number.isNaN(start)) return res.status(404).end();
+    res.set({ 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'attachment; filename="wedding.ics"' });
+    res.send(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wedding Hub//EN', 'BEGIN:VEVENT', 'UID:wedding-' + start + '@wedding-hub',
+      'DTSTAMP:' + z(new Date().toISOString()), 'DTSTART:' + z(st.event_start), 'DTEND:' + z(Number.isNaN(end) ? start + 5400000 : st.event_end),
+      'SUMMARY:' + esc(`Wedding of ${st.couple}`), 'LOCATION:' + esc(`${st.venue}, ${st.venue_address}`),
+      'DESCRIPTION:' + esc(`${st.date} ${st.time_text}. We look forward to celebrating with you!`), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'));
+  });
+  app.get('/app', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
   app.use(express.static(PUBLIC_DIR));
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
   // eslint-disable-next-line no-unused-vars

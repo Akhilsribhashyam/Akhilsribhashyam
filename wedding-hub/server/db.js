@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { DEFAULT_SETTINGS, DEFAULT_EVENTS, DEFAULT_PLACES } from './seed.js';
 
 export function openDb(file = process.env.DB_FILE || 'data/wedding.db') {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -60,7 +61,30 @@ export function openDb(file = process.env.DB_FILE || 'data/wedding.db') {
     );
     CREATE INDEX IF NOT EXISTS idx_rides_driver ON rides(driver_id, pickup_at);
   `);
+  // additive migrations for databases created by earlier versions
+  const addCol = (table, col, def) => {
+    if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+  };
+  addCol('places', 'kind', "TEXT NOT NULL DEFAULT 'eat'");
+  addCol('places', 'city', 'TEXT');
+  addCol('places', 'lat', 'REAL');
+  addCol('places', 'lng', 'REAL');
+  addCol('places', 'approx', 'INTEGER NOT NULL DEFAULT 0');
+  addCol('users', 'rsvp', 'TEXT');            // 'yes' | 'no'
+  addCol('users', 'rsvp_count', 'INTEGER');   // how many people are coming
   return db;
+}
+
+/** Fill in wedding details/schedule/places that are missing. Never overwrites what the admin edited. */
+export function seedContent(db) {
+  const ins = db.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)');
+  for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) ins.run(k, v);
+  if (!db.prepare('SELECT 1 FROM events').get())
+    for (const e of DEFAULT_EVENTS) db.prepare('INSERT INTO events (title,starts_at,venue,details) VALUES (?,?,?,?)').run(e.title, e.starts_at, e.venue, e.details);
+  if (!db.prepare('SELECT 1 FROM places').get() && process.env.SEED_PLACES !== '0')
+    for (const p of DEFAULT_PLACES)
+      db.prepare('INSERT INTO places (name,category,address,maps_url,note,created_at,kind,city,lat,lng,approx) VALUES (?,?,?,?,?,?,?,?,?,?,?)')
+        .run(p.name, p.category, p.address, '', p.note, Date.now(), p.kind, p.city, p.lat, p.lng, p.approx ? 1 : 0);
 }
 
 /* ---------- password hashing (scrypt, no extra deps) ---------- */
@@ -93,13 +117,5 @@ export function seedAdmin(db) {
   if (!pass) { pass = crypto.randomBytes(9).toString('base64url'); generated = true; }
   db.prepare("INSERT INTO users (role,name,login,pass_hash,created_at) VALUES ('admin','Admin',?,?,?)")
     .run(login, hashPassword(pass), Date.now());
-  const defaults = {
-    couple: 'Akhil & Partner',
-    date: 'Save the date',
-    venue: 'Wedding venue',
-    welcome: 'We are so happy you are here. Everything you need for the celebration is in this app.',
-  };
-  const ins = db.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)');
-  for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
   return { login, pass: generated ? pass : '(from ADMIN_PASS)' };
 }
