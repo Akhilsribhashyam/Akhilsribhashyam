@@ -54,12 +54,12 @@ export function createApp(db) {
   const placeUrl = (p) => p.maps_url || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([p.name, p.address, p.city].filter(Boolean).join(', '));
 
   /* ---------- auth ---------- */
+  // Only FAILED logins are counted, so a whole wedding party on one Wi-Fi/mobile network is never locked out.
   const attempts = new Map(); // ip -> {n, reset}
-  const throttled = (ip) => {
-    const now = Date.now();
-    const a = attempts.get(ip);
-    if (!a || a.reset < now) { attempts.set(ip, { n: 1, reset: now + 10 * 60 * 1000 }); return false; }
-    return ++a.n > 15;
+  const isLocked = (ip) => { const a = attempts.get(ip); return !!a && a.reset > Date.now() && a.n >= 30; };
+  const recordFailure = (ip) => {
+    const now = Date.now(), a = attempts.get(ip);
+    if (!a || a.reset < now) attempts.set(ip, { n: 1, reset: now + 10 * 60 * 1000 }); else a.n++;
   };
   const cookieOf = (req) => /(?:^|;\s*)sid=([a-f0-9]{64})/.exec(req.headers.cookie || '')?.[1];
   const setCookie = (res, token, maxAge) =>
@@ -68,8 +68,9 @@ export function createApp(db) {
   app.use((req, _res, next) => {
     const token = cookieOf(req);
     if (token) {
-      req.user = db.prepare(`SELECT u.id,u.role,u.name,u.phone,u.seats,u.vehicle,u.available,u.rsvp,u.rsvp_count FROM sessions s
-        JOIN users u ON u.id=s.user_id WHERE s.token=? AND s.created_at>?`).get(token, Date.now() - SESSION_MS);
+      req.user = db.prepare(`SELECT u.id,u.role,u.name,u.phone,u.seats,u.vehicle,u.available,u.rsvp,u.rsvp_count,u.stay_type,u.stay_room,u.stay_place_id,
+        p.name stay_place, p.address stay_address, p.city stay_city, p.maps_url stay_maps FROM sessions s
+        JOIN users u ON u.id=s.user_id LEFT JOIN places p ON p.id=u.stay_place_id WHERE s.token=? AND s.created_at>?`).get(token, Date.now() - SESSION_MS);
     }
     next();
   });
@@ -83,7 +84,7 @@ export function createApp(db) {
   });
 
   app.post('/api/login', (req, res) => {
-    if (throttled(req.ip)) return res.status(429).json({ error: 'Too many attempts, try again later' });
+    if (isLocked(req.ip)) return res.status(429).json({ error: 'Too many attempts, try again later' });
     let user;
     if (req.body.code) { // guest: invite code only
       user = db.prepare("SELECT * FROM users WHERE role='guest' AND code=?").get(str(req.body.code, 20).toUpperCase());
@@ -91,7 +92,7 @@ export function createApp(db) {
       const u = db.prepare("SELECT * FROM users WHERE role IN ('admin','driver') AND login=?").get(str(req.body.login, 60).toLowerCase());
       if (u && verifyPassword(str(req.body.password, 200), u.pass_hash)) user = u;
     }
-    if (!user) return res.status(401).json({ error: 'Wrong details, please check and retry' });
+    if (!user) { recordFailure(req.ip); return res.status(401).json({ error: 'Wrong details, please check and retry' }); }
     const token = crypto.randomBytes(32).toString('hex');
     db.prepare('INSERT INTO sessions (token,user_id,created_at) VALUES (?,?,?)').run(token, user.id, Date.now());
     setCookie(res, token, SESSION_MS / 1000);
@@ -105,7 +106,10 @@ export function createApp(db) {
     res.json({ ok: true });
   });
 
-  app.get('/api/me', need(), (req, res) => res.json(req.user));
+  app.get('/api/me', need(), (req, res) => {
+    const u = req.user;
+    res.json({ ...u, stay_url: u.stay_place ? placeUrl({ name: u.stay_place, address: u.stay_address, city: u.stay_city, maps_url: u.stay_maps }) : null });
+  });
 
   app.get('/api/stream', need(), (req, res) => {
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
@@ -192,7 +196,8 @@ export function createApp(db) {
 
   /* ---------- people (admin) ---------- */
   app.get('/api/guests', need('admin'), (_req, res) =>
-    res.json(db.prepare("SELECT id,name,phone,code,rsvp,rsvp_count FROM users WHERE role='guest' ORDER BY name").all()));
+    res.json(db.prepare(`SELECT u.id,u.name,u.phone,u.code,u.rsvp,u.rsvp_count,u.stay_type,u.stay_room,u.stay_place_id,p.name stay_place
+      FROM users u LEFT JOIN places p ON p.id=u.stay_place_id WHERE u.role='guest' ORDER BY u.name`).all()));
   app.post('/api/guests', need('admin'), (req, res) => {
     // accepts one name or many (one per line) for fast bulk entry
     const names = (Array.isArray(req.body.names) ? req.body.names : [req.body.name]).map((n) => str(n, 80)).filter(Boolean);
@@ -207,6 +212,26 @@ export function createApp(db) {
       throw new Error('Could not generate a unique code');
     }));
     res.json({ ok: true, guests: made });
+  });
+
+  // Where a guest is staying: a hotel (with room number), the new house or the old house.
+  const STAYS = { hotel: 'Hotel', new_house: 'New house', old_house: 'Old house' };
+  app.put('/api/guests/:id/stay', need('admin'), (req, res) => {
+    const g = db.prepare("SELECT id FROM users WHERE id=? AND role='guest'").get(int(req.params.id));
+    if (!g) return res.status(404).json({ error: 'Guest not found' });
+    const type = str(req.body.type, 20);
+    if (type && !STAYS[type]) return res.status(400).json({ error: 'Choose hotel, new house or old house' });
+    const place = req.body.place_id ? db.prepare('SELECT * FROM places WHERE id=?').get(int(req.body.place_id)) : null;
+    if (req.body.place_id && !place) return res.status(400).json({ error: 'Place not found' });
+    const room = type === 'hotel' ? str(req.body.room, 20) : '';
+    if (type === 'hotel' && !place) return res.status(400).json({ error: 'Choose the hotel' });
+    db.prepare('UPDATE users SET stay_type=?, stay_place_id=?, stay_room=? WHERE id=?')
+      .run(type || null, type && place ? place.id : null, type ? room : null, g.id);
+    if (type) {
+      const where = [STAYS[type], place && place.name !== STAYS[type] ? place.name : '', room ? `Room ${room}` : ''].filter(Boolean).join(' · ');
+      notify(g.id, 'Your stay is confirmed', where, 'stay', place ? placeUrl(place) : null);
+    }
+    res.json({ ok: true });
   });
 
   app.get('/api/drivers', need('admin'), (_req, res) =>

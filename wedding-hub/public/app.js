@@ -180,6 +180,32 @@ const haversine = (a, b, c, d) => {
 };
 const daysTo = (iso) => Math.ceil((Date.parse(iso) - Date.now()) / 86400000);
 
+/* ---- where a guest stays: hotel (+room), new house, old house ---- */
+const STAY_NAMES = { hotel: '🏨 Hotel', new_house: '🏡 New house', old_house: '🏚️ Old house' };
+const stayLabel = (g) => g.stay_type ? [g.stay_type === 'hotel' && g.stay_place ? '🏨 ' + g.stay_place : STAY_NAMES[g.stay_type], g.stay_room ? `Room ${g.stay_room}` : ''].filter(Boolean).join(' · ') : '';
+
+function stayEditor(g, places) {
+  const type = h('select', { name: 'type', 'aria-label': `Stay type for ${g.name}` },
+    h('option', { value: '' }, 'Not assigned'), Object.entries(STAY_NAMES).map(([v, t]) => h('option', { value: v, selected: g.stay_type === v }, t)));
+  const mk = (kinds, label) => h('select', { name: 'place', 'aria-label': label }, h('option', { value: '' }, label),
+    places.filter((p) => kinds.includes(p.kind)).map((p) => h('option', { value: p.id, selected: p.id === g.stay_place_id }, p.name)));
+  const hotel = mk(['stay'], 'Choose hotel…'), house = mk(['home'], 'Which house? (optional)');
+  const room = h('input', { name: 'room', maxlength: 20, placeholder: 'Room number, e.g. 204', value: g.stay_room || '', 'aria-label': 'Room number' });
+  const err = h('div', { class: 'err', role: 'alert' });
+  const box = h('div');
+  const draw = () => box.replaceChildren(...(type.value === 'hotel' ? [hotel, room] : type.value ? [house] : []));
+  type.addEventListener('change', draw); draw();
+  const save = h('button', { class: 'small', onclick: async (e) => {
+    err.textContent = ''; e.target.disabled = true;
+    try {
+      const place = type.value === 'hotel' ? hotel.value : house.value;
+      await api('PUT', `/guests/${g.id}/stay`, { type: type.value, place_id: place ? Number(place) : null, room: room.value });
+      toast('Saved', type.value ? `${g.name} notified` : 'Stay cleared'); state.refresh();
+    } catch (ex) { err.textContent = ex.message; } finally { e.target.disabled = false; }
+  } }, 'Save stay');
+  return h('details', {}, h('summary', {}, '🛏️ Set stay / room'), type, box, err, save);
+}
+
 /* ---------------- guest ---------------- */
 const guestViews = {
   async home() {
@@ -198,6 +224,9 @@ const guestViews = {
       h('div', { class: 'tiles' }, tile('🚖', 'Book a cab', go('cabs')), tile('📍', 'Places', go('eat')), tile('🔔', 'Alerts', go('alerts')),
         h('a', { class: 'tile', href: st.maps_url, target: '_blank', rel: 'noopener noreferrer' }, h('span', {}, '📍'), 'Directions')),
       meals.map((n) => h('div', { class: 'card meal' }, h('b', {}, '🍛 ' + n.title), n.body ? h('div', {}, n.body) : null, (n.url ? h('a', { class: 'btn small', href: n.url, target: '_blank', rel: 'noopener noreferrer' }, '📍 Directions') : null), h('div', { class: 'muted' }, when(n.created_at)))),
+      me.stay_type ? h('div', { class: 'card stay' }, h('h3', {}, 'Where you are staying'), h('div', { class: 'stayline' }, stayLabel(me)),
+        me.stay_address ? h('div', { class: 'muted' }, me.stay_address) : null,
+        me.stay_url ? h('a', { class: 'btn small', href: me.stay_url, target: '_blank', rel: 'noopener noreferrer' }, '📍 Directions') : null) : null,
       h('div', { class: 'card' }, h('h3', {}, 'Will you join us?'),
         me.rsvp ? h('p', {}, me.rsvp === 'yes' ? `✅ You are coming (${me.rsvp_count} ${me.rsvp_count > 1 ? 'people' : 'person'}). You can change this any time.` : '💌 You told us you cannot make it. You can change this any time.') : h('p', { class: 'muted' }, 'Please let the family know so we can plan for you.'),
         h('label', {}, 'Number of people'), count,
@@ -211,10 +240,11 @@ const guestViews = {
       h('p', { class: 'muted center' }, st.welcome)];
   },
   async cabs() {
-    const rides = await api('GET', '/rides');
+    const [rides, me] = await Promise.all([api('GET', '/rides'), api('GET', '/me')]);
+    const myStay = me.stay_type === 'hotel' && me.stay_place ? me.stay_place : me.stay_type ? STAY_NAMES[me.stay_type].replace(/^\S+\s/, '') : '';
     const soon = toLocalInput(Date.now() + 3600000);
     const f = form([
-      field('Pickup point', 'pickup', { attrs: { required: true, placeholder: 'Hotel, station, airport…' } }),
+      field('Pickup point', 'pickup', { attrs: { required: true, placeholder: 'Hotel, station, airport…', value: myStay } }),
       field('Drop-off', 'dropoff', { attrs: { required: true, placeholder: 'Venue, hotel…' } }),
       h('div', { class: 'grid2' },
         field('Pickup time', 'when', { type: 'datetime-local', attrs: { required: true, value: soon } }),
@@ -322,7 +352,7 @@ const adminViews = {
       })];
   },
   async guests() {
-    const [guests, sum] = await Promise.all([api('GET', '/guests'), api('GET', '/rsvp/summary')]);
+    const [guests, sum, places] = await Promise.all([api('GET', '/guests'), api('GET', '/rsvp/summary'), api('GET', '/places')]);
     const share = (g) => `Hi ${g.name}! You're invited to ${state.settings.couple}'s wedding. Open ${location.origin} and use invite code ${g.code} to see the schedule, book cabs and get meal alerts.`;
     return [h('h2', {}, `Guests (${guests.length})`),
     h('div', { class: 'card tiles stats' }, h('div', {}, h('b', {}, sum.people), 'people coming'), h('div', {}, h('b', {}, sum.declined), 'declined'), h('div', {}, h('b', {}, sum.pending), 'not replied')),
@@ -332,11 +362,12 @@ const adminViews = {
       const names = String(fd.get('names')).split('\n').map((s) => s.trim()).filter(Boolean);
       await api('POST', '/guests', { names }); state.refresh();
     })),
-    list(guests, 'No guests yet.', (g) => h('div', { class: 'card row between' },
-      h('div', {}, h('b', {}, g.name), h('div', { class: 'code' }, g.code), h('span', { class: `pill ${g.rsvp === 'yes' ? 'assigned' : g.rsvp === 'no' ? 'cancelled' : 'requested'}` }, g.rsvp === 'yes' ? `Coming (${g.rsvp_count})` : g.rsvp === 'no' ? 'Declined' : 'No reply')),
+    list(guests, 'No guests yet.', (g) => h('div', { class: 'card' }, h('div', { class: 'row between' },
+      h('div', {}, h('b', {}, g.name), h('div', { class: 'code' }, g.code), h('div', { class: 'muted' }, stayLabel(g) || 'Stay not set'), h('span', { class: `pill ${g.rsvp === 'yes' ? 'assigned' : g.rsvp === 'no' ? 'cancelled' : 'requested'}` }, g.rsvp === 'yes' ? `Coming (${g.rsvp_count})` : g.rsvp === 'no' ? 'Declined' : 'No reply')),
       h('div', { class: 'row' },
         h('a', { class: 'btn small ghost', href: 'https://wa.me/?text=' + encodeURIComponent(share(g)), target: '_blank', rel: 'noopener noreferrer' }, 'WhatsApp'),
-        h('button', { class: 'danger small', onclick: async () => { if (confirm(`Remove ${g.name}?`)) { await api('DELETE', '/people/' + g.id); state.refresh(); } } }, 'Remove'))))];
+        h('button', { class: 'danger small', onclick: async () => { if (confirm(`Remove ${g.name}?`)) { await api('DELETE', '/people/' + g.id); state.refresh(); } } }, 'Remove'))),
+      stayEditor(g, places)))];
   },
   async places() {
     const places = await api('GET', '/places');

@@ -144,3 +144,35 @@ test('meal alert at a chosen place, and new place types', async () => {
   assert.equal((await admin('POST', '/api/announce', { meal: 'Dinner', place_id: 99999 })).status, 400);
   assert.equal((await hari('POST', '/api/announce', { meal: 'Lunch', place_id: farm.id })).status, 403);
 });
+
+test('guest stay: hotel + room, new house, old house', async () => {
+  const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
+  const { body: { guests } } = await admin('POST', '/api/guests', { names: ['Ira', 'Jay'] });
+  const [ira, jay] = await Promise.all(guests.map(async (g) => { const c = await client(); await c('POST', '/api/login', { code: g.code }); return c; }));
+  await admin('POST', '/api/places', { name: 'Hotel Sai Grand', kind: 'stay', city: 'Vizianagaram', address: 'MG Road' });
+  const hotel = (await admin('GET', '/api/places')).body.find((p) => p.name === 'Hotel Sai Grand');
+  const [g1, g2] = (await admin('GET', '/api/guests')).body.filter((g) => ['Ira', 'Jay'].includes(g.name));
+
+  assert.equal((await admin('PUT', `/api/guests/${g1.id}/stay`, { type: 'hotel', room: '204' })).status, 400);       // hotel needed
+  assert.equal((await admin('PUT', `/api/guests/${g1.id}/stay`, { type: 'castle' })).status, 400);
+  assert.equal((await admin('PUT', `/api/guests/${g1.id}/stay`, { type: 'hotel', place_id: hotel.id, room: '204' })).status, 200);
+  const me = (await ira('GET', '/api/me')).body;
+  assert.equal(me.stay_type, 'hotel'); assert.equal(me.stay_room, '204'); assert.equal(me.stay_place, 'Hotel Sai Grand'); assert.match(me.stay_url, /google\.com\/maps/);
+  assert.ok((await ira('GET', '/api/notifications')).body.some((n) => n.title === 'Your stay is confirmed' && /Room 204/.test(n.body)));
+
+  assert.equal((await admin('PUT', `/api/guests/${g2.id}/stay`, { type: 'old_house', room: '99' })).status, 200);
+  const me2 = (await jay('GET', '/api/me')).body;
+  assert.equal(me2.stay_type, 'old_house'); assert.ok(!me2.stay_room);        // no room numbers for houses
+  assert.equal((await admin('PUT', `/api/guests/${g2.id}/stay`, { type: '' })).status, 200);
+  assert.equal((await jay('GET', '/api/me')).body.stay_type, null);
+  assert.equal((await ira('PUT', `/api/guests/${g2.id}/stay`, { type: 'new_house' })).status, 403);
+});
+
+test('many successful logins from one IP are fine; repeated failures get locked out', async () => {
+  const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
+  const { body: { guests } } = await admin('POST', '/api/guests', { names: Array.from({ length: 40 }, (_, i) => `Bulk ${i}`) });
+  for (const g of guests) assert.equal((await (await client())('POST', '/api/login', { code: g.code })).status, 200);
+  const c = await client();
+  let last; for (let i = 0; i < 31; i++) last = (await c('POST', '/api/login', { code: 'WRONG1' })).status;
+  assert.equal(last, 429);
+});

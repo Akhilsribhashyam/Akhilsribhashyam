@@ -71,6 +71,9 @@ export function openDb(file = process.env.DB_FILE || 'data/wedding.db') {
   addCol('places', 'lng', 'REAL');
   addCol('places', 'approx', 'INTEGER NOT NULL DEFAULT 0');
   addCol('notifications', 'url', 'TEXT');   // optional link, e.g. directions to where the meal is served
+  addCol('users', 'stay_type', 'TEXT');        // 'hotel' | 'new_house' | 'old_house'
+  addCol('users', 'stay_place_id', 'INTEGER'); // which hotel/house (from places)
+  addCol('users', 'stay_room', 'TEXT');        // hotel room number
   addCol('users', 'rsvp', 'TEXT');            // 'yes' | 'no'
   addCol('users', 'rsvp_count', 'INTEGER');   // how many people are coming
   return db;
