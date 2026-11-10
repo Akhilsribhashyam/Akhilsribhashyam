@@ -167,7 +167,7 @@ export function createApp(db) {
       if (typeof req.body[k] !== 'string') continue;
       const v = str(req.body[k], 400);
       if (k === 'maps_url' && v && !safeUrl(v)) return res.status(400).json({ error: 'Maps link must start with http(s)://' });
-      if ((k === 'event_start' || k === 'event_end') && v && Number.isNaN(Date.parse(v))) return res.status(400).json({ error: 'Invalid date/time' });
+      if (['event_start', 'event_end', 'reception_start'].includes(k) && v && Number.isNaN(Date.parse(v))) return res.status(400).json({ error: 'Invalid date/time' });
       up.run(k, v);
     }
     res.json({ ok: true });
@@ -418,13 +418,20 @@ export function createApp(db) {
     const st = Object.fromEntries(db.prepare('SELECT key,value FROM settings').all().map((r) => [r.key, r.value]));
     const z = (iso) => new Date(iso).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
     const esc = (t) => String(t || '').replace(/[\\;,]/g, (c) => '\\' + c).replace(/\r?\n/g, '\\n');
-    const start = Date.parse(st.event_start), end = Date.parse(st.event_end);
-    if (Number.isNaN(start)) return res.status(404).end();
+    const where = 'LOCATION:' + esc(`${st.venue}, ${st.venue_address}`), stamp = 'DTSTAMP:' + z(new Date().toISOString());
+    const vevent = (id, summary, startIso, endIso, fallbackMs, note) => {
+      const start = Date.parse(startIso), end = Date.parse(endIso);
+      if (Number.isNaN(start)) return [];
+      return ['BEGIN:VEVENT', `UID:${id}-${start}@wedding-hub`, stamp, 'DTSTART:' + z(start), 'DTEND:' + z(Number.isNaN(end) ? start + fallbackMs : end),
+        'SUMMARY:' + esc(summary), where, 'DESCRIPTION:' + esc(note), 'END:VEVENT'];
+    };
+    const events = [
+      ...vevent('reception', `Reception: ${st.couple}`, st.reception_start, '', 3 * 3600000, st.reception_text),
+      ...vevent('wedding', `Wedding of ${st.couple} (Muhurtham)`, st.event_start, st.event_end, 3600000, st.muhurtham_text),
+    ];
+    if (!events.length) return res.status(404).end();
     res.set({ 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'attachment; filename="wedding.ics"' });
-    res.send(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wedding Hub//EN', 'BEGIN:VEVENT', 'UID:wedding-' + start + '@wedding-hub',
-      'DTSTAMP:' + z(new Date().toISOString()), 'DTSTART:' + z(st.event_start), 'DTEND:' + z(Number.isNaN(end) ? start + 5400000 : st.event_end),
-      'SUMMARY:' + esc(`Wedding of ${st.couple}`), 'LOCATION:' + esc(`${st.venue}, ${st.venue_address}`),
-      'DESCRIPTION:' + esc(`${st.date} ${st.time_text}. We look forward to celebrating with you!`), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n'));
+    res.send(['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wedding Hub//EN', ...events, 'END:VCALENDAR'].join('\r\n'));
   });
   app.get('/app', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'app.html')));
   app.use(express.static(PUBLIC_DIR));

@@ -7,21 +7,26 @@ export const DEFAULT_SETTINGS = {
   groom: 'S. Akhil Sribhashyam',
   groom_parents: 'S/o Sri. Sribhashyam Srinivasa Rao & Smt. Sribhashyam Seshukumari',
   date: 'Friday, 12th February 2027',
-  time_text: 'Night 12:15 to 1:30',
+  time_text: 'Reception 7 PM · Muhurtham 1:58 AM',
+  reception_text: 'Friday, 12th February 2027 · 7:00 PM onwards',
+  muhurtham_text: 'Saturday, 13th February 2027 · 1:58 AM',
   venue: 'Sri Sai Balaji Function Hall',
   venue_address: 'Near Aim Concept School, Ganesh Colony, Thotapalem, Balaji Nagar, Vizianagaram, A.P. - 535002',
   maps_url: 'https://www.google.com/maps/search/?api=1&query=Sri+Sai+Balaji+Function+Hall+Thotapalem+Vizianagaram',
-  // Friday-night muhurtham is after midnight, i.e. 00:15 on Sat 13 Feb IST. Admin can change in Setup.
-  event_start: '2027-02-13T00:15:00+05:30',
-  event_end: '2027-02-13T01:30:00+05:30',
+  // Reception on Friday evening; the muhurtham follows that night at 1:58 AM, i.e. early Saturday 13 Feb IST.
+  reception_start: '2027-02-12T19:00:00+05:30',
+  event_start: '2027-02-13T01:58:00+05:30',
+  event_end: '',
   reg_open: '1',      // '1' = guests may register themselves, '0' = closed
   reg_passcode: '',   // optional passcode printed on the invitation; empty = no passcode
   welcome: 'Your presence will make our celebration complete. Find the schedule, book a cab, get meal alerts and discover where to eat, all in this app.',
 };
 
 export const DEFAULT_EVENTS = [
-  { title: 'Muhurtham (Wedding)', starts_at: Date.parse('2027-02-13T00:15:00+05:30'),
-    venue: 'Sri Sai Balaji Function Hall, Vizianagaram', details: 'Friday night, 12:15 to 1:30' },
+  { title: 'Reception', starts_at: Date.parse('2027-02-12T19:00:00+05:30'),
+    venue: 'Sri Sai Balaji Function Hall, Vizianagaram', details: '7:00 PM onwards' },
+  { title: 'Muhurtham (Wedding)', starts_at: Date.parse('2027-02-13T01:58:00+05:30'),
+    venue: 'Sri Sai Balaji Function Hall, Vizianagaram', details: 'Friday night, after midnight: 1:58 AM' },
 ];
 
 /* lat/lng are approximate (area level) and flagged approx=1: use "Open in Maps" for exact directions.

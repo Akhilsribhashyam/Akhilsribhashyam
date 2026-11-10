@@ -13,7 +13,10 @@ async function loadSettings() {
     const short = (full = '') => full.replace(/^([A-Z]\.\s*)+/, '').split(' ')[0];
     const b = short(settings.bride), g = short(settings.groom);
     const city = /([A-Za-z]+)\s*,\s*A\.?P/.exec(settings.venue_address || '')?.[1];
-    const map = { ...settings, bride_short: b, groom_short: g, bride_initial: b[0], groom_initial: g[0], venue_city: city };
+    // "Friday, 12th February 2027 · 7:00 PM onwards" -> day and time shown on separate lines
+    const [rDay, rTime] = (settings.reception_text || '').split(' · '), [mDay, mTime] = (settings.muhurtham_text || '').split(' · ');
+    const map = { ...settings, bride_short: b, groom_short: g, bride_initial: b[0], groom_initial: g[0], venue_city: city,
+      reception_day: rDay, reception_time: rTime, muhurtham_day: mDay, muhurtham_time: mTime || mDay };
     for (const el of $$('[data-bind]')) { const v = map[el.dataset.bind]; if (v) el.textContent = v; }
     if (settings.couple) document.title = `Wedding Invitation · ${settings.couple}`;
     // "Friday, 12th February 2027" -> big date block; hide the block if the text has another shape
@@ -73,7 +76,7 @@ if (!reduced) {
 
 /* ---- countdown ---- */
 function tick() {
-  const t = Date.parse(settings.event_start || '2027-02-13T00:15:00+05:30');
+  const t = Date.parse(settings.event_start || '2027-02-13T01:58:00+05:30');
   const box = $('#count');
   if (Number.isNaN(t)) { box.hidden = true; return; }
   const ms = t - Date.now();

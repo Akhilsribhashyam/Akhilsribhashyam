@@ -75,7 +75,8 @@ main{position:relative;z-index:1}
   font:500 .66rem var(--sans);letter-spacing:.17em;text-transform:uppercase;color:var(--gold-hi)}
 .dateblock span{white-space:nowrap;padding:9px 0;border-top:1px solid #d6ad5c88;border-bottom:1px solid #d6ad5c88}
 .dateblock b{font:500 3.1rem/1 var(--serif);letter-spacing:0;color:var(--ivory)}
-.time{margin:.8rem 0 0;font-size:1.02rem;color:var(--soft);letter-spacing:.04em}
+.time{margin:.85rem 0 0;font-size:1.04rem;color:var(--ivory);letter-spacing:.03em}
+.city{margin:.35rem 0 0;font:500 .62rem var(--sans);letter-spacing:.36em;text-transform:uppercase;color:var(--gold);padding-left:.36em}
 .count{display:flex;align-items:center;justify-content:center;gap:14px;margin:26px 0 0}
 .count div{min-width:52px}.count>i{width:1px;height:28px;background:#d6ad5c55}
 .count b{display:block;font:500 2rem/1.1 var(--serif);color:var(--gold-hi);font-variant-numeric:tabular-nums}

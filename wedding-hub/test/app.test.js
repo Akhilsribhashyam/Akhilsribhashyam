@@ -98,8 +98,11 @@ test('invitation, calendar file, seeded places, RSVP, settings', async () => {
   const ics = await fetch(base + '/invite.ics');
   const txt = await ics.text();
   assert.match(ics.headers.get('content-type'), /text\/calendar/);
-  assert.match(txt, /DTSTART:20270212T184500Z/);   // 00:15 IST on 13 Feb = 18:45 UTC on 12 Feb
-  assert.match(txt, /DTEND:20270212T200000Z/);
+  assert.match(txt, /SUMMARY:Reception[^\r]*\r\n/);
+  assert.match(txt, /DTSTART:20270212T133000Z/);   // reception: 7:00 PM IST on Fri 12 Feb
+  assert.match(txt, /DTSTART:20270212T202800Z/);   // muhurtham: 1:58 AM IST on Sat 13 Feb = 20:28 UTC on 12 Feb
+  assert.equal(txt.match(/BEGIN:VEVENT/g).length, 2);
+  assert.equal(st.muhurtham_text, 'Saturday, 13th February 2027 · 1:58 AM');
 
   const admin = await client(); await admin('POST', '/api/login', { login: 'admin', password: 'adminpass1' });
   const { body: { guests } } = await admin('POST', '/api/guests', { names: ['Gita'] });

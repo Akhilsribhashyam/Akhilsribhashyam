@@ -417,18 +417,19 @@ const adminViews = {
   async setup() {
     const [events, s] = await Promise.all([api('GET', '/events'), api('GET', '/settings')]);
     const text = [['couple', 'Couple (short, e.g. Bhuvaneswari & Akhil)'], ['bride', 'Bride name'], ['bride_parents', "Bride's parents line"], ['groom', 'Groom name'], 
-      ['groom_parents', "Groom's parents line"], ['date', 'Date as printed'], ['time_text', 'Time as printed'], ['venue', 'Venue'], ['venue_address', 'Venue address'], ['maps_url', 'Venue Google Maps link']];
+      ['groom_parents', "Groom's parents line"], ['date', 'Date as printed'], ['time_text', 'Short timing line'], ['reception_text', 'Reception (day · time)'], ['muhurtham_text', 'Muhurtham (day · time)'], ['venue', 'Venue'], ['venue_address', 'Venue address'], ['maps_url', 'Venue Google Maps link']];
     return [h('h2', {}, 'Wedding details'), h('p', { class: 'muted' }, 'These appear on the public invitation and in the guest app.'), h('div', { class: 'card' }, form([
       text.map(([k, label]) => field(label, k, { attrs: { value: s[k] || '' } })),
       h('h3', {}, 'Guest registration'),
       field('Can guests register themselves?', 'reg_open', { options: [['1', 'Yes, anyone with the link'], ['0', 'No, invite codes only']], value: s.reg_open === '0' ? '0' : '1' }),
       field('Passcode (optional, print it on the invitation)', 'reg_passcode', { attrs: { value: s.reg_passcode || '', autocomplete: 'off', placeholder: 'e.g. akhilbhuvi27' } }),
+      field('Reception starts (for the calendar)', 'reception_start', { type: 'datetime-local', attrs: { value: s.reception_start ? toLocalInput(Date.parse(s.reception_start)) : '' } }),
       field('Muhurtham starts (used for countdown and calendar)', 'event_start', { type: 'datetime-local', attrs: { value: s.event_start ? toLocalInput(Date.parse(s.event_start)) : '' } }),
       field('Muhurtham ends', 'event_end', { type: 'datetime-local', attrs: { value: s.event_end ? toLocalInput(Date.parse(s.event_end)) : '' } }),
       field('Welcome message', 'welcome', { type: 'textarea', attrs: { value: s.welcome || '' } })],
     'Save', async (fd) => {
       const body = Object.fromEntries(fd);
-      for (const k of ['event_start', 'event_end']) if (body[k]) body[k] = new Date(body[k]).toISOString();
+      for (const k of ['event_start', 'event_end', 'reception_start']) if (body[k]) body[k] = new Date(body[k]).toISOString();
       await api('PUT', '/settings', body); state.settings = await api('GET', '/settings'); toast('Saved');
     }, { reset: false })),
     h('h2', {}, 'Schedule'), h('div', { class: 'card' }, form([

@@ -50,7 +50,8 @@
           <span id="db-dow">Friday</span><b id="db-day">12</b><span id="db-my">February 2027</span>
         </div>
         <p class="sr" data-bind="date">Friday, 12th February 2027</p>
-        <p class="time rise d6"><span data-bind="time_text">Night 12:15 to 1:30</span> · <span data-bind="venue_city">Vizianagaram</span></p>
+        <p class="time rise d6" data-bind="time_text">Reception 7 PM · Muhurtham 1:58 AM</p>
+        <p class="city rise d6" data-bind="venue_city">Vizianagaram</p>
       </div>
       <div class="count rise d7" id="count" role="timer" aria-label="Time until the wedding">
         <div><b id="cd-d">--</b><span>days</span></div><i></i><div><b id="cd-h">--</b><span>hours</span></div><i></i>
@@ -86,11 +87,11 @@
       <div class="when reveal">
         <div class="w-row">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
-          <div><small>Date</small><b data-bind="date">Friday, 12th February 2027</b></div>
+          <div><small>Reception</small><b data-bind="reception_day">Friday, 12th February 2027</b><span data-bind="reception_time">7:00 PM onwards</span></div>
         </div>
         <div class="w-row">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
-          <div><small>Muhurtham</small><b data-bind="time_text">Night 12:15 to 1:30</b><span>Friday night, after midnight</span></div>
+          <div><small>Muhurtham</small><b data-bind="muhurtham_time">1:58 AM</b><span data-bind="muhurtham_day">Saturday, 13th February 2027</span><span>That same night, after the reception</span></div>
         </div>
         <div class="w-row">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.800 12 21 12 21z"/><circle cx="12" cy="9.500" r="2.500"/></svg>
